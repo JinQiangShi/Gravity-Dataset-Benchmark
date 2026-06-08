@@ -110,6 +110,20 @@ def main():
     args = parse_args()
     os.makedirs(args.save_dir, exist_ok=True)
 
+    # Logger (init early to capture full training log)
+    writer = None
+    if args.logger == "tensorboard":
+        from torch.utils.tensorboard import SummaryWriter
+        writer = SummaryWriter(args.tensorboard_log_dir)
+    elif args.logger == "swanlab":
+        import swanlab
+        swanlab.init(
+            project=args.swanlab_project,
+            workspace=args.swanlab_workspace,
+            config=vars(args),
+        )
+    
+    # Device
     device = torch.device(args.device)
     print(f"Device: {device}")
 
@@ -170,19 +184,6 @@ def main():
         start_epoch = ckpt["epoch"] + 1
         best_metric = ckpt["best_metric"]
         print(f"Resumed from epoch {start_epoch}, best_metric={best_metric:.4f}")
-
-    # Logger
-    writer = None
-    if args.logger == "tensorboard":
-        from torch.utils.tensorboard import SummaryWriter
-        writer = SummaryWriter(args.tensorboard_log_dir)
-    elif args.logger == "swanlab":
-        import swanlab
-        swanlab.init(
-            project=args.swanlab_project,
-            workspace=args.swanlab_workspace,
-            config=vars(args),
-        )
 
     # Training loop
     save_interval = max(1, args.epochs // 5)  # save ~5 checkpoints total

@@ -1,0 +1,6 @@
+__pycache__/
+checkpoints/
+swanlog/
+test_result/
+README.md
+test.ipynb
