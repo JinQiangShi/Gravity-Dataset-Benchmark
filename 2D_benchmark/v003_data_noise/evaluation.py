@@ -24,6 +24,22 @@ def psnr(pred: torch.Tensor, target: torch.Tensor, data_range: float = None) -> 
     return 10 * torch.log10((data_range ** 2) / mse)
 
 
+def mae(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    """
+    计算平均绝对误差 (MAE)。
+
+    Params:
+    -----
+        pred: 预测张量
+        target: 真值张量
+
+    Returns:
+    --------
+        MAE 值（标量）
+    """
+    return F.l1_loss(pred, target)
+
+
 def ssim(
     pred: torch.Tensor,
     target: torch.Tensor,

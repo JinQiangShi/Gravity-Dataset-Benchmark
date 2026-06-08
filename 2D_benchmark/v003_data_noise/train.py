@@ -7,7 +7,7 @@ from DATASET_PATH import DATASET_PATH
 from dataloader import zarr_dataloader
 from model_unet import Gravity_Inverse_UNet_2D
 from loss import CombinedLoss
-from evaluation import psnr, ssim
+from evaluation import psnr, ssim, mae
 
 
 def parse_args():
@@ -77,6 +77,7 @@ def validate(model, loaders, criterion, device):
     total_loss = 0.0
     total_psnr = 0.0
     total_ssim = 0.0
+    total_mae = 0.0
     total_batches = 0
 
     for loader in loaders:
@@ -90,10 +91,11 @@ def validate(model, loaders, criterion, device):
             total_loss += loss.item()
             total_psnr += psnr(pred, label).item()
             total_ssim += ssim(pred, label).item()
+            total_mae += mae(pred, label).item()
             total_batches += 1
 
     n = max(total_batches, 1)
-    return total_loss / n, total_psnr / n, total_ssim / n
+    return total_loss / n, total_psnr / n, total_ssim / n, total_mae / n
 
 
 def save_checkpoint(model, optimizer, scheduler, epoch, best_metric, path):
@@ -191,7 +193,7 @@ def main():
         t0 = time.time()
 
         train_loss = train_one_epoch(model, train_loaders, criterion, optimizer, device)
-        val_loss, val_psnr, val_ssim = validate(model, val_loaders, criterion, device)
+        val_loss, val_psnr, val_ssim, val_mae = validate(model, val_loaders, criterion, device)
 
         if scheduler:
             scheduler.step()
@@ -206,6 +208,7 @@ def main():
             f"val_loss={val_loss:.6f} | "
             f"val_psnr={val_psnr:.2f} | "
             f"val_ssim={val_ssim:.4f} | "
+            f"val_mae={val_mae:.6f} | "
             f"time={elapsed:.1f}s"
         )
 
@@ -215,6 +218,7 @@ def main():
             writer.add_scalar("Loss/val", val_loss, epoch)
             writer.add_scalar("Metrics/psnr", val_psnr, epoch)
             writer.add_scalar("Metrics/ssim", val_ssim, epoch)
+            writer.add_scalar("Metrics/mae", val_mae, epoch)
             writer.add_scalar("LR", current_lr, epoch)
         elif args.logger == "swanlab":
             swanlab.log({
@@ -222,6 +226,7 @@ def main():
                 "Loss/val": val_loss,
                 "Metrics/psnr": val_psnr,
                 "Metrics/ssim": val_ssim,
+                "Metrics/mae": val_mae,
                 "LR": current_lr,
             }, step=epoch)
 
@@ -239,8 +244,8 @@ def main():
 
     # Final test evaluation
     print("\n--- Test Evaluation ---")
-    test_loss, test_psnr, test_ssim = validate(model, test_loaders, criterion, device)
-    print(f"Test Loss: {test_loss:.6f} | PSNR: {test_psnr:.2f} | SSIM: {test_ssim:.4f}")
+    test_loss, test_psnr, test_ssim, test_mae = validate(model, test_loaders, criterion, device)
+    print(f"Test Loss: {test_loss:.6f} | PSNR: {test_psnr:.2f} | SSIM: {test_ssim:.4f} | MAE: {test_mae:.6f}")
 
     # Save final model
     save_checkpoint(model, optimizer, scheduler, args.epochs - 1, best_metric,

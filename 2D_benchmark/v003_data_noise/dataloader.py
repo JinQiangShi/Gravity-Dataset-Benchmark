@@ -9,17 +9,20 @@ class ZarrDataset(Dataset):
         self,
         zarr_path: str,
         dtype: torch.dtype = torch.float32,
+        add_noise: bool = False,
     ):
         """
         Params:
         -----
             zarr_path: zarr file path
             dtype: output tensor data type
+            add_noise: whether to add noise to gravity data (only for training)
         """
         zarr_file = zarr.open(zarr_path, mode="r")
         self.density = zarr_file["density"]
         self.gravity = zarr_file["gravity_config1"]
         self.dtype = dtype
+        self.add_noise = add_noise
 
         self.density_shape = self.density.shape[-2:] # [nz, nx]
 
@@ -31,7 +34,8 @@ class ZarrDataset(Dataset):
         data = torch.from_numpy(data).to(self.dtype)
         data = self.gravity_interpolate(data) # [channels, nx]
         # data = self.gravity_normalize(data)
-        data = self.gravity_add_noise(data)
+        if self.add_noise:
+            data = self.gravity_add_noise(data)
 
         label = self.density[idx]
         label = torch.from_numpy(label).to(self.dtype) # [nz, nx]
@@ -89,15 +93,16 @@ def zarr_dataloader(
     --------
         (train_loader, val_loader, test_loader)
     """
-    dataset = ZarrDataset(zarr_path, dtype=dtype)
-    n = len(dataset)
+    train_dataset_full = ZarrDataset(zarr_path, dtype=dtype, add_noise=True)
+    eval_dataset_full = ZarrDataset(zarr_path, dtype=dtype, add_noise=False)
+    n = len(train_dataset_full)
 
     train_end = int(n * 0.6)
     val_end = int(n * 0.8)
 
-    train_dataset = Subset(dataset, range(0, train_end))
-    val_dataset = Subset(dataset, range(train_end, val_end))
-    test_dataset = Subset(dataset, range(val_end, n))
+    train_dataset = Subset(train_dataset_full, range(0, train_end))
+    val_dataset = Subset(eval_dataset_full, range(train_end, val_end))
+    test_dataset = Subset(eval_dataset_full, range(val_end, n))
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
