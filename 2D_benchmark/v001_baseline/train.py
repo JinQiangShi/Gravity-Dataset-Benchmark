@@ -8,7 +8,7 @@ from dataloader import zarr_dataloader
 from model import Gravity_Inverse_UNet_2D
 from loss import CombinedLoss
 from validate import validate, testify
-from utils import AdaptiveMetricTracker, TrainingLogger, build_scheduler
+from utils import TrainingLogger, build_scheduler
 from saver import save_checkpoint
 
 def parse_args():
@@ -26,7 +26,8 @@ def parse_args():
     parser.add_argument("--step_size", type=int, default=30) # for step scheduler
     parser.add_argument("--gamma", type=float, default=0.1) # for step scheduler
     parser.add_argument("--warmup_epochs", type=int, default=10, help="number of warmup epochs (for warmup_cosine / warmup_step)")
-    parser.add_argument("--save_dir", type=str, default="checkpoints")
+    parser.add_argument("--save_dir_checkpoints", type=str, default="checkpoints")
+    parser.add_argument("--save_dir_test_results", type=str, default="test_results")
     parser.add_argument("--dataset_type", type=str, default="geo_model", choices=["geo_model", "salt_model", "all"])
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--resume", type=str, default=None, help="checkpoint path to resume from")
@@ -38,12 +39,14 @@ def parse_args():
                         help="swanlab project name (used when --logger swanlab)")
     parser.add_argument("--swanlab_workspace", type=str, default=None,
                         help="swanlab workspace name (used when --logger swanlab)")
-    # Adaptive best-model selection
-    parser.add_argument("--best_warmup", type=int, default=5,
-                        help="number of initial epochs to gather statistics before adaptive selection kicks in")
-    parser.add_argument("--best_threshold", type=float, default=0.5,
-                        help="minimum normalized improvement score to trigger saving best model")
+    parser.add_argument("--best_metric", type=str, default="loss",
+                        choices=["loss", "psnr", "ssim", "mae"],
+                        help="validation metric used to select the best model")
     return parser.parse_args()
+
+
+# higher-is-better direction for each candidate metric
+METRIC_DIRECTIONS = {"loss": False, "psnr": True, "ssim": True, "mae": False}
 
 
 def get_dataset_paths(dataset_type: str) -> dict:
@@ -82,7 +85,8 @@ def train_one_epoch(model, loaders, criterion, optimizer, device):
 
 def main():
     args = parse_args()
-    os.makedirs(args.save_dir, exist_ok=True)
+    os.makedirs(args.save_dir_checkpoints, exist_ok=True)
+    os.makedirs(args.save_dir_test_results, exist_ok=True)
 
     # Logger (init early to capture full training log)
     logger = TrainingLogger(
@@ -142,11 +146,13 @@ def main():
         step_size=args.step_size, gamma=args.gamma, warmup_epochs=args.warmup_epochs,
     )
 
-    # Adaptive metric tracker for best model selection
-    HIGHER_IS_BETTER = {"psnr": True, "ssim": True, "mae": False, "loss": False}
-    tracker = AdaptiveMetricTracker(
-        warmup_epochs=args.best_warmup, threshold=args.best_threshold, higher_is_better=HIGHER_IS_BETTER
-    )
+    # Best model selection
+    best_metric_name = args.best_metric
+    higher_is_better = METRIC_DIRECTIONS[best_metric_name]
+    best_metric_value = float("-inf") if higher_is_better else float("inf")
+
+    def is_better(new, old):
+        return new > old if higher_is_better else new < old
 
     # Resume
     start_epoch = 0
@@ -157,16 +163,12 @@ def main():
         if scheduler and ckpt["scheduler_state_dict"]:
             scheduler.load_state_dict(ckpt["scheduler_state_dict"])
         start_epoch = ckpt["epoch"] + 1
-        tracker.best = ckpt.get("tracker_best", tracker.best)
-        tracker.n = ckpt.get("tracker_n", 0)
-        tracker._mean = ckpt.get("tracker_mean", {})
-        tracker._m2 = ckpt.get("tracker_m2", {})
-        print(f"Resumed from epoch {start_epoch}, tracker n={tracker.n}, best={tracker.best}")
-    print(f"Adaptive best-model selection: warmup={args.best_warmup}, threshold={args.best_threshold}")
+        best_metric_value = ckpt.get("best_metric_value", best_metric_value)
+        print(f"Resumed from epoch {start_epoch}, best_{best_metric_name}={best_metric_value:.6f}")
+    print(f"Best-model selection: {best_metric_name} ({'higher' if higher_is_better else 'lower'} is better)")
 
     # Training loop
     save_interval = max(1, args.epochs // 5)  # save ~5 checkpoints total
-    improvement_score = 0.0
     current_metrics = {}
     for epoch in range(start_epoch, args.epochs):
         t0 = time.time()
@@ -191,25 +193,26 @@ def main():
             f"time={elapsed:.1f}s"
         )
 
-        # Adaptive best model selection
+        # Best model selection
         current_metrics = {"psnr": val_psnr, "ssim": val_ssim, "mae": val_mae, "loss": val_loss}
-        should_save, improvement_score = tracker.evaluate(current_metrics)
-        if should_save:
+        cur_value = current_metrics[best_metric_name]
+        if is_better(cur_value, best_metric_value):
+            best_metric_value = cur_value
             save_checkpoint(
-                model, optimizer, scheduler, epoch, improvement_score,
-                os.path.join(args.save_dir, "best_model.pth"),
-                tracker=tracker, metrics=current_metrics,
+                model, optimizer, scheduler, epoch, best_metric_value,
+                os.path.join(args.save_dir_checkpoints, "best_model.pth"),
+                best_metric_name=best_metric_name, metrics=current_metrics,
             )
             print(
-                f"  -> New best model saved (improvement_score={improvement_score:.4f}, "
-                f"psnr={val_psnr:.2f}, ssim={val_ssim:.4f}, mae={val_mae:.6f}, loss={val_loss:.6f})"
+                f"  -> New best model saved ({best_metric_name}={cur_value:.6f}, "
+                f"psnr={val_psnr:.2f}, ssim={val_ssim:.4f}, mae={val_mae:.6f})"
             )
 
         # Periodic checkpoint, only save ~5 models
         if (epoch + 1) % save_interval == 0:
-            save_checkpoint(model, optimizer, scheduler, epoch, improvement_score,
-                            os.path.join(args.save_dir, f"epoch_{epoch+1}.pth"),
-                            tracker=tracker, metrics=current_metrics)
+            save_checkpoint(model, optimizer, scheduler, epoch, cur_value,
+                            os.path.join(args.save_dir_checkpoints, f"epoch_{epoch+1}.pth"),
+                            best_metric_name=best_metric_name, metrics=current_metrics)
 
         # Logger
         logger.log_scalars({
@@ -218,17 +221,15 @@ def main():
             "Metrics/psnr": val_psnr,
             "Metrics/ssim": val_ssim,
             "Metrics/mae": val_mae,
-            "Metrics/improvement_score": improvement_score,
             "LR": current_lr,
         }, step=epoch)
 
     # Save final model
-    save_checkpoint(model, optimizer, scheduler, args.epochs - 1, improvement_score,
-                    os.path.join(args.save_dir, "last_model.pth"),
-                    tracker=tracker, metrics=current_metrics)
+    save_checkpoint(model, optimizer, scheduler, args.epochs - 1, cur_value,
+                    os.path.join(args.save_dir_checkpoints, "last_model.pth"),
+                    best_metric_name=best_metric_name, metrics=current_metrics)
 
-    test_results_dir = os.path.join(args.save_dir, "test_results")
-    os.makedirs(test_results_dir, exist_ok=True)
+    test_results_dir = args.save_dir_test_results
 
     # Final test evaluation on last model
     print("\n--- Test Evaluation (Last Model) ---")
@@ -238,7 +239,7 @@ def main():
     print(f"Test Loss: {test_loss:.6f} | PSNR: {test_psnr:.2f} | SSIM: {test_ssim:.4f} | MAE: {test_mae:.6f}")
 
     # Test evaluation on best model
-    best_model_path = os.path.join(args.save_dir, "best_model.pth")
+    best_model_path = os.path.join(args.save_dir_checkpoints, "best_model.pth")
     if os.path.isfile(best_model_path):
         print("\n--- Test Evaluation (Best Model) ---")
         ckpt = torch.load(best_model_path, map_location=device)

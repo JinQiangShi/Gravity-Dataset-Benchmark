@@ -57,7 +57,8 @@ def _evaluate_loop(model, loaders, criterion, device,
             data_arr = np.concatenate(all_data, axis=0)
             label_arr = np.concatenate(all_label, axis=0)
             pred_arr = np.concatenate(all_pred, axis=0)
-            npz_path = os.path.join(save_dir, f"{tag}_{name}.npz")
+            npz_path = os.path.join(save_dir, f"{tag}", f"{name.split('.')[0]}.npz")
+            os.makedirs(os.path.dirname(npz_path), exist_ok=True)
             np.savez(npz_path, data=data_arr, label=label_arr, pred=pred_arr)
             print(f"  Saved: {npz_path}  (N={len(data_arr)})")
 

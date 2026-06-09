@@ -1,8 +1,6 @@
 __pycache__/
 checkpoints/
-huoqiu_unet_test_20260608/
-logs/
 swanlog/
-test_result/
+test_results/
 README.md
 test.ipynb
