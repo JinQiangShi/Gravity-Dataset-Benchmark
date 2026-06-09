@@ -86,32 +86,3 @@ def zarr_dataloader(
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
     return train_loader, val_loader, test_loader
-
-def get_test_loader(
-    zarr_path: str,
-    batch_size: int,
-    num_workers: int = 0,
-    dtype: torch.dtype = torch.float32,
-) -> DataLoader:
-    """
-    get test dataloader from zarr file
-
-    Params:
-    -----
-        zarr_path: zarr file path
-        batch_size: batch size
-        num_workers: num of worker number
-        dtype: output tensor data type
-
-    Returns:
-    --------
-        test_loader
-    """
-    train_loader, val_loader, test_loader = zarr_dataloader(
-        zarr_path,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        dtype=dtype,
-    )
-    return test_loader

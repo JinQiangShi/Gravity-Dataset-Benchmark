@@ -33,21 +33,18 @@ class TotalVariationLoss(nn.Module):
         super(TotalVariationLoss, self).__init__()
         self.epsilon = 1e-8
 
-    def forward(self, pred, target):
+    def forward(self, pred):
         """
         Calculate Total Variation loss
         
         Params:
         -----
             pred: Predicted density map [Batch_size, 1, height, width]
-            target: Ground truth density map [Batch_size, 1, height, width]
         
         Returns:
         -----
             TV loss value
         """
-        # Here, target is not used in TV loss, just for format consistency
-        
         # Calculate gradients along x and y directions using L2 norm
         diff_i = pred[:, :, :, 1:] - pred[:, :, :, :-1]  # horizontal differences
         diff_j = pred[:, :, 1:, :] - pred[:, :, :-1, :]  # vertical differences
@@ -84,5 +81,5 @@ class CombinedLoss(nn.Module):
         """
         total_loss = 0.0
         total_loss += self.mse_weight * self.mse_loss(pred, target)
-        total_loss += self.tv_weight * self.tv_loss(pred, target)
+        total_loss += self.tv_weight * self.tv_loss(pred)
         return total_loss

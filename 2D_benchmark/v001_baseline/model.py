@@ -87,9 +87,6 @@ class Gravity_Inverse_UNet_2D(nn.Module):
             linear: use linear upsample
         """
         super().__init__()
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.linear = linear
         
         self.in_block = ConvBlock(in_channels, 64) # input block
         self.down1 = DownBlock(64, 128) # first downsample block

@@ -5,10 +5,11 @@ import torch
 
 from DATASET_PATH import DATASET_PATH
 from dataloader import zarr_dataloader
-from model_unet import Gravity_Inverse_UNet_2D
+from model import Gravity_Inverse_UNet_2D
 from loss import CombinedLoss
-from evaluation import psnr, ssim
-
+from validate import validate, testify
+from utils import AdaptiveMetricTracker, TrainingLogger, build_scheduler
+from saver import save_checkpoint
 
 def parse_args():
     parser = argparse.ArgumentParser(description="2D Gravity Inverse Training")
@@ -20,9 +21,11 @@ def parse_args():
     parser.add_argument("--tv_weight", type=float, default=0.01)
     parser.add_argument("--in_channels", type=int, default=2)
     parser.add_argument("--out_channels", type=int, default=126)
-    parser.add_argument("--scheduler", type=str, default="cosine", choices=["cosine", "step", "none"])
+    parser.add_argument("--scheduler", type=str, default="cosine",
+                        choices=["cosine", "step", "warmup_cosine", "warmup_step", "none"])
     parser.add_argument("--step_size", type=int, default=30) # for step scheduler
     parser.add_argument("--gamma", type=float, default=0.1) # for step scheduler
+    parser.add_argument("--warmup_epochs", type=int, default=10, help="number of warmup epochs (for warmup_cosine / warmup_step)")
     parser.add_argument("--save_dir", type=str, default="checkpoints")
     parser.add_argument("--dataset_type", type=str, default="geo_model", choices=["geo_model", "salt_model", "all"])
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
@@ -35,6 +38,11 @@ def parse_args():
                         help="swanlab project name (used when --logger swanlab)")
     parser.add_argument("--swanlab_workspace", type=str, default=None,
                         help="swanlab workspace name (used when --logger swanlab)")
+    # Adaptive best-model selection
+    parser.add_argument("--best_warmup", type=int, default=5,
+                        help="number of initial epochs to gather statistics before adaptive selection kicks in")
+    parser.add_argument("--best_threshold", type=float, default=0.5,
+                        help="minimum normalized improvement score to trigger saving best model")
     return parser.parse_args()
 
 
@@ -63,6 +71,7 @@ def train_one_epoch(model, loaders, criterion, optimizer, device):
 
             optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0, norm_type=2)
             optimizer.step()
 
             total_loss += loss.item()
@@ -71,45 +80,20 @@ def train_one_epoch(model, loaders, criterion, optimizer, device):
     return total_loss / max(total_batches, 1)
 
 
-@torch.no_grad()
-def validate(model, loaders, criterion, device):
-    model.eval()
-    total_loss = 0.0
-    total_psnr = 0.0
-    total_ssim = 0.0
-    total_batches = 0
-
-    for loader in loaders:
-        for data, label in loader:
-            data = data.to(device)
-            label = label.to(device)
-
-            pred = model(data)
-            loss = criterion(pred, label)
-
-            total_loss += loss.item()
-            total_psnr += psnr(pred, label).item()
-            total_ssim += ssim(pred, label).item()
-            total_batches += 1
-
-    n = max(total_batches, 1)
-    return total_loss / n, total_psnr / n, total_ssim / n
-
-
-def save_checkpoint(model, optimizer, scheduler, epoch, best_metric, path):
-    torch.save({
-        "epoch": epoch,
-        "model_state_dict": model.state_dict(),
-        "optimizer_state_dict": optimizer.state_dict(),
-        "scheduler_state_dict": scheduler.state_dict() if scheduler else None,
-        "best_metric": best_metric,
-    }, path)
-
-
 def main():
     args = parse_args()
     os.makedirs(args.save_dir, exist_ok=True)
 
+    # Logger (init early to capture full training log)
+    logger = TrainingLogger(
+        backend=args.logger,
+        log_dir=args.tensorboard_log_dir,
+        project=args.swanlab_project,
+        workspace=args.swanlab_workspace,
+        config=vars(args),
+    )
+    
+    # Device
     device = torch.device(args.device)
     print(f"Device: {device}")
 
@@ -121,6 +105,7 @@ def main():
     train_loaders = []
     val_loaders = []
     test_loaders = []
+    test_loader_names = []
     for name, zarr_path in dataset_paths.items():
         if not os.path.exists(zarr_path):
             print(f"Warning: {zarr_path} not found, skipping.")
@@ -134,6 +119,7 @@ def main():
         train_loaders.append(train_loader)
         val_loaders.append(val_loader)
         test_loaders.append(test_loader)
+        test_loader_names.append(name)
         print(f"  {name}: train={len(train_loader.dataset)}, val={len(val_loader.dataset)}, test={len(test_loader.dataset)}")
 
     if not train_loaders:
@@ -151,16 +137,19 @@ def main():
     # Loss, optimizer, scheduler
     criterion = CombinedLoss(mse_weight=1.0, tv_weight=args.tv_weight)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    scheduler = build_scheduler(
+        optimizer, args.scheduler, args.epochs,
+        step_size=args.step_size, gamma=args.gamma, warmup_epochs=args.warmup_epochs,
+    )
 
-    scheduler = None
-    if args.scheduler == "cosine":
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
-    elif args.scheduler == "step":
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
+    # Adaptive metric tracker for best model selection
+    HIGHER_IS_BETTER = {"psnr": True, "ssim": True, "mae": False, "loss": False}
+    tracker = AdaptiveMetricTracker(
+        warmup_epochs=args.best_warmup, threshold=args.best_threshold, higher_is_better=HIGHER_IS_BETTER
+    )
 
     # Resume
     start_epoch = 0
-    best_metric = -float("inf")
     if args.resume and os.path.isfile(args.resume):
         ckpt = torch.load(args.resume, map_location=device)
         model.load_state_dict(ckpt["model_state_dict"])
@@ -168,29 +157,22 @@ def main():
         if scheduler and ckpt["scheduler_state_dict"]:
             scheduler.load_state_dict(ckpt["scheduler_state_dict"])
         start_epoch = ckpt["epoch"] + 1
-        best_metric = ckpt["best_metric"]
-        print(f"Resumed from epoch {start_epoch}, best_metric={best_metric:.4f}")
-
-    # Logger
-    writer = None
-    if args.logger == "tensorboard":
-        from torch.utils.tensorboard import SummaryWriter
-        writer = SummaryWriter(args.tensorboard_log_dir)
-    elif args.logger == "swanlab":
-        import swanlab
-        swanlab.init(
-            project=args.swanlab_project,
-            workspace=args.swanlab_workspace,
-            config=vars(args),
-        )
+        tracker.best = ckpt.get("tracker_best", tracker.best)
+        tracker.n = ckpt.get("tracker_n", 0)
+        tracker._mean = ckpt.get("tracker_mean", {})
+        tracker._m2 = ckpt.get("tracker_m2", {})
+        print(f"Resumed from epoch {start_epoch}, tracker n={tracker.n}, best={tracker.best}")
+    print(f"Adaptive best-model selection: warmup={args.best_warmup}, threshold={args.best_threshold}")
 
     # Training loop
     save_interval = max(1, args.epochs // 5)  # save ~5 checkpoints total
+    improvement_score = 0.0
+    current_metrics = {}
     for epoch in range(start_epoch, args.epochs):
         t0 = time.time()
 
         train_loss = train_one_epoch(model, train_loaders, criterion, optimizer, device)
-        val_loss, val_psnr, val_ssim = validate(model, val_loaders, criterion, device)
+        val_loss, val_psnr, val_ssim, val_mae = validate(model, val_loaders, criterion, device)
 
         if scheduler:
             scheduler.step()
@@ -205,50 +187,71 @@ def main():
             f"val_loss={val_loss:.6f} | "
             f"val_psnr={val_psnr:.2f} | "
             f"val_ssim={val_ssim:.4f} | "
+            f"val_mae={val_mae:.6f} | "
             f"time={elapsed:.1f}s"
         )
 
-        # Logger
-        if args.logger == "tensorboard":
-            writer.add_scalar("Loss/train", train_loss, epoch)
-            writer.add_scalar("Loss/val", val_loss, epoch)
-            writer.add_scalar("Metrics/psnr", val_psnr, epoch)
-            writer.add_scalar("Metrics/ssim", val_ssim, epoch)
-            writer.add_scalar("LR", current_lr, epoch)
-        elif args.logger == "swanlab":
-            swanlab.log({
-                "Loss/train": train_loss,
-                "Loss/val": val_loss,
-                "Metrics/psnr": val_psnr,
-                "Metrics/ssim": val_ssim,
-                "LR": current_lr,
-            }, step=epoch)
+        # Adaptive best model selection
+        current_metrics = {"psnr": val_psnr, "ssim": val_ssim, "mae": val_mae, "loss": val_loss}
+        should_save, improvement_score = tracker.evaluate(current_metrics)
+        if should_save:
+            save_checkpoint(
+                model, optimizer, scheduler, epoch, improvement_score,
+                os.path.join(args.save_dir, "best_model.pth"),
+                tracker=tracker, metrics=current_metrics,
+            )
+            print(
+                f"  -> New best model saved (improvement_score={improvement_score:.4f}, "
+                f"psnr={val_psnr:.2f}, ssim={val_ssim:.4f}, mae={val_mae:.6f}, loss={val_loss:.6f})"
+            )
 
-        # Save best model
-        if val_psnr > best_metric:
-            best_metric = val_psnr
-            save_checkpoint(model, optimizer, scheduler, epoch, best_metric,
-                            os.path.join(args.save_dir, "best_model.pth"))
-            print(f"  -> New best model saved (psnr={best_metric:.2f})")
-
-        # Periodic checkpoint, only save ~10 models
+        # Periodic checkpoint, only save ~5 models
         if (epoch + 1) % save_interval == 0:
-            save_checkpoint(model, optimizer, scheduler, epoch, best_metric,
-                            os.path.join(args.save_dir, f"epoch_{epoch+1}.pth"))
+            save_checkpoint(model, optimizer, scheduler, epoch, improvement_score,
+                            os.path.join(args.save_dir, f"epoch_{epoch+1}.pth"),
+                            tracker=tracker, metrics=current_metrics)
 
-    # Final test evaluation
-    print("\n--- Test Evaluation ---")
-    test_loss, test_psnr, test_ssim = validate(model, test_loaders, criterion, device)
-    print(f"Test Loss: {test_loss:.6f} | PSNR: {test_psnr:.2f} | SSIM: {test_ssim:.4f}")
+        # Logger
+        logger.log_scalars({
+            "Loss/train": train_loss,
+            "Loss/val": val_loss,
+            "Metrics/psnr": val_psnr,
+            "Metrics/ssim": val_ssim,
+            "Metrics/mae": val_mae,
+            "Metrics/improvement_score": improvement_score,
+            "LR": current_lr,
+        }, step=epoch)
 
     # Save final model
-    save_checkpoint(model, optimizer, scheduler, args.epochs - 1, best_metric,
-                    os.path.join(args.save_dir, "last_model.pth"))
+    save_checkpoint(model, optimizer, scheduler, args.epochs - 1, improvement_score,
+                    os.path.join(args.save_dir, "last_model.pth"),
+                    tracker=tracker, metrics=current_metrics)
 
-    if args.logger == "tensorboard":
-        writer.close()
-    elif args.logger == "swanlab":
-        swanlab.finish()
+    test_results_dir = os.path.join(args.save_dir, "test_results")
+    os.makedirs(test_results_dir, exist_ok=True)
+
+    # Final test evaluation on last model
+    print("\n--- Test Evaluation (Last Model) ---")
+    test_loss, test_psnr, test_ssim, test_mae = testify(
+        model, test_loaders, test_loader_names, criterion, device, test_results_dir, "last_model"
+    )
+    print(f"Test Loss: {test_loss:.6f} | PSNR: {test_psnr:.2f} | SSIM: {test_ssim:.4f} | MAE: {test_mae:.6f}")
+
+    # Test evaluation on best model
+    best_model_path = os.path.join(args.save_dir, "best_model.pth")
+    if os.path.isfile(best_model_path):
+        print("\n--- Test Evaluation (Best Model) ---")
+        ckpt = torch.load(best_model_path, map_location=device)
+        model.load_state_dict(ckpt["model_state_dict"])
+        best_test_loss, best_test_psnr, best_test_ssim, best_test_mae = testify(
+            model, test_loaders, test_loader_names, criterion, device, test_results_dir, "best_model"
+        )
+        print(f"Test Loss: {best_test_loss:.6f} | PSNR: {best_test_psnr:.2f} | SSIM: {best_test_ssim:.4f} | MAE: {best_test_mae:.6f}")
+        print(f"(Best model saved at epoch {ckpt['epoch'] + 1})")
+    else:
+        print("\nNo best_model.pth found, skipping best model test evaluation.")
+
+    logger.close()
     print("Training complete.")
 
 
