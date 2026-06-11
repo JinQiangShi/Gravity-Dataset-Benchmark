@@ -15,34 +15,29 @@ from utils import set_seed
 
 def parse_args():
     parser = argparse.ArgumentParser(description="2D Gravity Inverse Inference")
-    parser.add_argument("--checkpoint", type=str, nargs="+", required=True,
-                        help="path(s) to trained model checkpoint(s) (.pth)")
-    parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--num_workers", type=int, default=0)
+    # device settings
+    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    # model settings
     parser.add_argument("--in_channels", type=int, default=2)
     parser.add_argument("--out_channels", type=int, default=126)
+    parser.add_argument("--checkpoint", type=str, nargs="+", required=True, help="path(s) to trained model checkpoint(s) (.pth)")
+    # loss settings
     parser.add_argument("--tv_weight", type=float, default=0.01)
-    parser.add_argument("--device", type=str,
-                        default="cuda" if torch.cuda.is_available() else "cpu")
-    parser.add_argument("--save_dir", type=str, default="test_results",
-                        help="directory to save prediction files")
+    # exist dataset settings
+    parser.add_argument("--dataset_type", type=str, default="geo_model", choices=["geo_model", "salt_model", "all"])
+    parser.add_argument("--split", type=str, default="test", choices=["train", "val", "test"])
+    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--num_workers", type=int, default=0)
+    # custom numpy data settings
+    parser.add_argument("--input", type=str, default=None, help="path to .npy/.npz file or a directory of them")
+    parser.add_argument("--target_nx", type=int, default=None, help="gravity interpolation target nx (defaults to --out_channels)")
+    parser.add_argument("--input_key", type=str, default="gravity", help="key name in .npz file (ignored for .npy)")
+    # save directory settings
+    parser.add_argument("--save_dir", type=str, default="test_results", help="directory to save prediction files")
     parser.add_argument("--sub_folder", type=str, nargs="+", default=None,
                         help="output sub-folder name(s), one per checkpoint (default: checkpoint filename stem)")
-    parser.add_argument("--save_format", type=str, default="npz",
-                        choices=["npz", "zarr"],
+    parser.add_argument("--save_format", type=str, default="npz", choices=["npz", "zarr"],
                         help="output file format (default: npz)")
-    # zarr dataset mode
-    parser.add_argument("--dataset_type", type=str, default="geo_model",
-                        choices=["geo_model", "salt_model", "all"])
-    parser.add_argument("--split", type=str, default="test",
-                        choices=["train", "val", "test"])
-    # custom numpy mode
-    parser.add_argument("--input", type=str, default=None,
-                        help="path to .npy/.npz file or a directory of them")
-    parser.add_argument("--target_nx", type=int, default=None,
-                        help="gravity interpolation target nx (defaults to --out_channels)")
-    parser.add_argument("--input_key", type=str, default="gravity",
-                        help="key name in .npz file (ignored for .npy)")
     return parser.parse_args()
 
 

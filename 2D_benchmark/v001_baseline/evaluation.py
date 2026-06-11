@@ -4,17 +4,7 @@ import torch.nn.functional as F
 
 def psnr(pred: torch.Tensor, target: torch.Tensor, data_range: float = None) -> torch.Tensor:
     """
-    计算峰值信噪比 (PSNR)。
-
-    Params:
-    -----
-        pred: 预测张量
-        target: 真值张量
-        data_range: 数据范围，若为 None 则自动从 target 计算
-
-    Returns:
-    --------
-        PSNR 值（标量）
+    peak signal to noise ratio (PSNR)
     """
     if data_range is None:
         data_range = target.max() - target.min()
@@ -24,44 +14,27 @@ def psnr(pred: torch.Tensor, target: torch.Tensor, data_range: float = None) -> 
     return 10 * torch.log10((data_range ** 2) / mse)
 
 
-def mae(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+_gaussian_window_cache: dict[tuple, torch.Tensor] = {}
+
+
+def _get_gaussian_window(window_size: int, channels: int, device: torch.device) -> torch.Tensor:
+    """获取缓存的高斯卷积核，避免重复计算。"""
+    key = (window_size, channels, device)
+    if key not in _gaussian_window_cache:
+        coords = torch.arange(window_size, dtype=torch.float32, device=device) - window_size // 2
+        g = torch.exp(-(coords ** 2) / (2 * 1.5 ** 2))
+        g = g / g.sum()
+        window = g.unsqueeze(1) * g.unsqueeze(0)  # [ws, ws]
+        window = window.unsqueeze(0).unsqueeze(0)  # [1, 1, ws, ws]
+        window = window.expand(channels, 1, -1, -1).contiguous()
+        _gaussian_window_cache[key] = window
+    return _gaussian_window_cache[key]
+
+
+def ssim(pred: torch.Tensor, target: torch.Tensor, data_range: float = None,
+        window_size: int = 3, k1: float = 0.01, k2: float = 0.03) -> torch.Tensor:
     """
-    计算平均绝对误差 (MAE)。
-
-    Params:
-    -----
-        pred: 预测张量
-        target: 真值张量
-
-    Returns:
-    --------
-        MAE 值（标量）
-    """
-    return F.l1_loss(pred, target)
-
-
-def ssim(
-    pred: torch.Tensor,
-    target: torch.Tensor,
-    data_range: float = None,
-    window_size: int = 7,
-    k1: float = 0.01,
-    k2: float = 0.03,
-) -> torch.Tensor:
-    """
-    计算结构相似性 (SSIM)，支持 2D 输入 [B, C, H, W]。
-
-    Params:
-    -----
-        pred: 预测张量 [B, C, H, W]
-        target: 真值张量 [B, C, H, W]
-        data_range: 数据范围，若为 None 则自动从 target 计算
-        window_size: 高斯窗口大小
-        k1, k2: 稳定性常数
-
-    Returns:
-    --------
-        平均 SSIM 值（标量）
+    structural similarity index (SSIM) for 2D images [B, C, H, W].
     """
     if data_range is None:
         data_range = target.max() - target.min()
@@ -69,15 +42,8 @@ def ssim(
     c1 = (k1 * data_range) ** 2
     c2 = (k2 * data_range) ** 2
 
-    # 高斯核
-    coords = torch.arange(window_size, dtype=torch.float32, device=pred.device) - window_size // 2
-    g = torch.exp(-(coords ** 2) / (2 * 1.5 ** 2))
-    g = g / g.sum()
-    window = g.unsqueeze(1) * g.unsqueeze(0)  # [ws, ws]
-    window = window.unsqueeze(0).unsqueeze(0)  # [1, 1, ws, ws]
-
     channels = pred.shape[1]
-    window = window.expand(channels, 1, -1, -1)
+    window = _get_gaussian_window(window_size, channels, pred.device)
     pad = window_size // 2
 
     mu_pred = F.conv2d(pred, window, padding=pad, groups=channels)
@@ -96,3 +62,10 @@ def ssim(
 
     ssim_map = numerator / denominator
     return ssim_map.mean()
+
+
+def mae(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    """
+    mean absolute error (MAE)
+    """
+    return F.l1_loss(pred, target)

@@ -50,10 +50,10 @@ class UpBlock(nn.Module):
             x1: upsampled feature map
             x2: downsampled feature map
         """
-        x1 = self.up(x1) # 上采样
-        x1 = self._align(x1, x2) # 对齐
-        x = torch.cat([x2, x1], dim=1) # 拼接
-        return self.conv(x) # 卷积层
+        x1 = self.up(x1) # upsample
+        x1 = self._align(x1, x2) # align
+        x = torch.cat([x2, x1], dim=1) # concat
+        return self.conv(x)
 
     def _align(self, x1, x2):
         """

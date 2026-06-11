@@ -8,7 +8,7 @@ from dataloader import zarr_dataloader
 from model import Gravity_Inverse_UNet_2D
 from loss import CombinedLoss
 from validate import validate, testify
-from utils import TrainingLogger, build_scheduler, set_seed, save_checkpoint
+from utils import TrainingLogger, build_scheduler, set_seed, save_checkpoint, EarlyStopping
 
 # higher-is-better direction for each candidate metric
 METRIC_DIRECTIONS = {"loss": False, "psnr": True, "ssim": True, "mae": False}
@@ -16,29 +16,41 @@ METRIC_DIRECTIONS = {"loss": False, "psnr": True, "ssim": True, "mae": False}
 
 def parse_args():
     parser = argparse.ArgumentParser(description="2D Gravity Inverse Training")
+    # epoch settings
     parser.add_argument("--epochs", type=int, default=100)
+    # device settings
+    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    # dataset settings
+    parser.add_argument("--dataset_type", type=str, default="geo_model", choices=["geo_model", "salt_model", "all"])
     parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--weight_decay", type=float, default=1e-4)
     parser.add_argument("--num_workers", type=int, default=0)
-    parser.add_argument("--tv_weight", type=float, default=0.01)
+    # model settings
     parser.add_argument("--in_channels", type=int, default=2)
     parser.add_argument("--out_channels", type=int, default=126)
-    parser.add_argument("--scheduler", type=str, default="cosine",
-                        choices=["cosine", "step", "warmup_cosine", "warmup_step", "none"])
-    parser.add_argument("--step_size", type=int, default=30)  # for step scheduler
-    parser.add_argument("--gamma", type=float, default=0.1)  # for step scheduler
-    parser.add_argument("--warmup_epochs", type=int, default=10,
-                        help="number of warmup epochs (for warmup_cosine / warmup_step)")
+    # model resume settings
+    parser.add_argument("--resume", type=str, default=None, help="checkpoint path to resume from")
+    # loss settings
+    parser.add_argument("--tv_weight", type=float, default=0.01)
+    # optimizer settings
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--weight_decay", type=float, default=1e-4)
+    # scheduler settings
+    parser.add_argument("--scheduler", type=str, default="plateau", choices=["plateau", "warmup_plateau", "none"])
+    parser.add_argument("--plateau_patience", type=int, default=10, help="epochs with no improvement before reducing LR")
+    parser.add_argument("--plateau_factor", type=float, default=0.1, help="factor to reduce LR by on plateau")
+    parser.add_argument("--warmup_epochs", type=int, default=10, help="number of warmup epochs (for warmup_plateau)")
+    # early stopping settings
+    parser.add_argument("--best_metric", type=str, default="loss", choices=["loss", "psnr", "ssim", "mae"],
+                        help="validation metric used to select the best model")
+    parser.add_argument("--early_stopping_patience", type=int, default=0,
+                        help="stop training if the best metric does not improve for this many epochs (0 to disable)")
+    parser.add_argument("--early_stopping_min_delta", type=float, default=0.0,
+                        help="minimum change to qualify as an improvement for early stopping")
+    # save directory settings
     parser.add_argument("--save_dir_checkpoints", type=str, default="checkpoints")
     parser.add_argument("--save_dir_test_results", type=str, default="test_results")
-    parser.add_argument("--dataset_type", type=str, default="geo_model",
-                        choices=["geo_model", "salt_model", "all"])
-    parser.add_argument("--device", type=str,
-                        default="cuda" if torch.cuda.is_available() else "cpu")
-    parser.add_argument("--resume", type=str, default=None, help="checkpoint path to resume from")
-    parser.add_argument("--logger", type=str, default="tensorboard",
-                        choices=["tensorboard", "swanlab"],
+    # logger settings
+    parser.add_argument("--logger", type=str, default="tensorboard", choices=["tensorboard", "swanlab"],
                         help="training tracker: tensorboard or swanlab")
     parser.add_argument("--tensorboard_log_dir", type=str, default="logs",
                         help="tensorboard log directory (used when --logger tensorboard)")
@@ -46,10 +58,6 @@ def parse_args():
                         help="swanlab project name (used when --logger swanlab)")
     parser.add_argument("--swanlab_workspace", type=str, default=None,
                         help="swanlab workspace name (used when --logger swanlab)")
-    # parser.add_argument("--seed", type=int, default=42, help="random seed for reproducibility")
-    parser.add_argument("--best_metric", type=str, default="loss",
-                        choices=["loss", "psnr", "ssim", "mae"],
-                        help="validation metric used to select the best model")
     return parser.parse_args()
 
 
@@ -104,7 +112,7 @@ def run_test(model, test_loaders, test_names, criterion, device, results_dir, su
     if ckpt_path and os.path.isfile(ckpt_path):
         ckpt = torch.load(ckpt_path, map_location=device)
         model.load_state_dict(ckpt["model_state_dict"])
-        print(f"\n--- Test Evaluation (Best Model, epoch {ckpt['epoch'] + 1}) ---")
+        print(f"\n--- Test Evaluation (epoch {ckpt['epoch'] + 1}) ---")
     else:
         print(f"\n--- Test Evaluation ({sub_folder}) ---")
     loss, psnr, ssim, mae = testify(model, test_loaders, test_names, criterion, device, results_dir, sub_folder)
@@ -143,9 +151,16 @@ def main():
     criterion = CombinedLoss(mse_weight=1.0, tv_weight=args.tv_weight)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = build_scheduler(
-        optimizer, args.scheduler, args.epochs,
-        step_size=args.step_size, gamma=args.gamma, warmup_epochs=args.warmup_epochs,
+        optimizer, args.scheduler,
+        patience=args.plateau_patience, 
+        factor=args.plateau_factor,
+        warmup_epochs=args.warmup_epochs,
     )
+    warmup_sched, plateau_sched = (None, None)
+    if isinstance(scheduler, tuple):
+        warmup_sched, plateau_sched = scheduler
+    elif scheduler is not None:
+        plateau_sched = scheduler
 
     # Best model selection
     higher_is_better = METRIC_DIRECTIONS[args.best_metric]
@@ -159,15 +174,32 @@ def main():
         model.load_state_dict(ckpt["model_state_dict"])
         optimizer.load_state_dict(ckpt["optimizer_state_dict"])
         if scheduler and ckpt["scheduler_state_dict"]:
-            scheduler.load_state_dict(ckpt["scheduler_state_dict"])
+            sd = ckpt["scheduler_state_dict"]
+            if isinstance(scheduler, tuple):
+                warmup_sched.load_state_dict(sd["warmup"])
+                plateau_sched.load_state_dict(sd["plateau"])
+            else:
+                scheduler.load_state_dict(sd)
         start_epoch = ckpt["epoch"] + 1
         best_value = ckpt.get("best_metric_value", best_value)
         print(f"Resumed from epoch {start_epoch}, best_{args.best_metric}={best_value:.6f}")
     print(f"Best-model selection: {args.best_metric} "
           f"({'higher' if higher_is_better else 'lower'} is better)")
 
+    # Early stopping
+    early_stopper = None
+    if args.early_stopping_patience > 0:
+        es_mode = "max" if higher_is_better else "min"
+        early_stopper = EarlyStopping(
+            patience=args.early_stopping_patience,
+            min_delta=args.early_stopping_min_delta,
+            mode=es_mode,
+        )
+        print(f"Early stopping: patience={args.early_stopping_patience}, "
+              f"min_delta={args.early_stopping_min_delta}, mode={es_mode}")
+
     # Training loop
-    save_interval = max(1, args.epochs // 5)  # save ~5 checkpoints total
+    save_interval = 20
     metrics = {}
     ckpt_dir = args.save_dir_checkpoints
 
@@ -175,8 +207,10 @@ def main():
         t0 = time.time()
         train_loss = train_one_epoch(model, train_loaders, criterion, optimizer, device)
         val_loss, val_psnr, val_ssim, val_mae = validate(model, val_loaders, criterion, device)
-        if scheduler:
-            scheduler.step()
+        if warmup_sched and epoch < args.warmup_epochs:
+            warmup_sched.step()
+        elif plateau_sched:
+            plateau_sched.step(val_loss)
 
         lr = optimizer.param_groups[0]["lr"]
         elapsed = time.time() - t0
@@ -208,8 +242,14 @@ def main():
             "LR": lr,
         }, step=epoch)
 
+        # Early stopping
+        if early_stopper and early_stopper(cur):
+            print(f"\nEarly stopping triggered at epoch {epoch+1} "
+                  f"(no improvement for {args.early_stopping_patience} epochs).")
+            break
+
     # Save last model
-    save_checkpoint(model, optimizer, scheduler, args.epochs - 1, cur,
+    save_checkpoint(model, optimizer, scheduler, epoch, cur,
                     os.path.join(ckpt_dir, "last_model.pth"),
                     best_metric_name=args.best_metric, metrics=metrics)
 

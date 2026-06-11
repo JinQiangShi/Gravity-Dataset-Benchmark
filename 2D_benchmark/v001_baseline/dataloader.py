@@ -69,7 +69,7 @@ def zarr_dataloader(
 
     Returns:
     --------
-        (train_loader, val_loader, test_loader)
+        Tuple[train_loader, val_loader, test_loader]
     """
     dataset = ZarrDataset(zarr_path, dtype=dtype)
     n = len(dataset)
