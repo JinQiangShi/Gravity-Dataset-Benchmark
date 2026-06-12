@@ -36,8 +36,8 @@ def parse_args():
     parser.add_argument("--weight_decay", type=float, default=1e-4)
     # scheduler settings
     parser.add_argument("--scheduler", type=str, default="plateau", choices=["plateau", "warmup_plateau", "none"])
-    parser.add_argument("--plateau_patience", type=int, default=10, help="epochs with no improvement before reducing LR")
-    parser.add_argument("--plateau_factor", type=float, default=0.1, help="factor to reduce LR by on plateau")
+    parser.add_argument("--plateau_epochs", type=int, default=5, help="epochs with no improvement before reducing LR")
+    parser.add_argument("--plateau_factor", type=float, default=0.5, help="factor to reduce LR by on plateau")
     parser.add_argument("--warmup_epochs", type=int, default=10, help="number of warmup epochs (for warmup_plateau)")
     # early stopping settings
     parser.add_argument("--best_metric", type=str, default="loss", choices=["loss", "psnr", "ssim", "mae"],
@@ -152,7 +152,7 @@ def main():
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = build_scheduler(
         optimizer, args.scheduler,
-        patience=args.plateau_patience, 
+        patience=args.plateau_epochs, 
         factor=args.plateau_factor,
         warmup_epochs=args.warmup_epochs,
     )

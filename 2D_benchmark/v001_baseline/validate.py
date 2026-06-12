@@ -28,17 +28,7 @@ _SAVERS = {
 
 
 def save_results(save_dir, sub_folder, name, data, label, pred, fmt="npz"):
-    """Save evaluation result arrays to disk.
-
-    Args:
-        save_dir: root output directory.
-        sub_folder: sub-folder name under *save_dir*.
-        name: original loader name (extension is stripped).
-        data, label, pred: numpy arrays to persist.
-        fmt: output format key, one of ``_SAVERS`` (default ``"npz"``).
-             Add new formats by registering a ``(saver_fn, ext)`` pair in
-             ``_SAVERS``.
-    """
+    """Save evaluation result arrays to disk."""
     if fmt not in _SAVERS:
         raise ValueError(f"Unsupported save format '{fmt}'. Choose from {list(_SAVERS)}")
     saver_fn, ext = _SAVERS[fmt]
@@ -115,8 +105,7 @@ def validate(model, loaders, criterion, device):
 
 
 @torch.no_grad()
-def testify(model, loaders, loader_names, criterion, device, save_dir, sub_folder,
-            save_fmt="npz"):
+def testify(model, loaders, loader_names, criterion, device, save_dir, sub_folder, save_fmt="npz"):
     """Compute test metrics and save per-loader predictions."""
     return _evaluate_loop(
         model, loaders, criterion, device,
