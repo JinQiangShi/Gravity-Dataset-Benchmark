@@ -111,8 +111,8 @@ def load_test_results(src_dir:str, max_vis:int, dst_dir:str=None):
 if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     src_dirs = [
-        r"E:\Research\benchmark\2D_benchmark\v001_baseline\test_results\geo_model\best_model",
-        r"E:\Research\benchmark\2D_benchmark\v001_baseline\test_results\geo_model\last_model"
+        r".\test_results\geo_model\best_model",
+        r".\test_results\geo_model\last_model"
     ]
 
     max_vis = 100
