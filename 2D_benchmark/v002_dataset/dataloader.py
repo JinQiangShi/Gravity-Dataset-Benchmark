@@ -9,6 +9,10 @@ class ZarrDataset(Dataset):
         self,
         zarr_path: str,
         dtype: torch.dtype = torch.float32,
+        gradient: bool = False,
+        frequency: bool = False,
+        normalize: bool = False,
+        noise: bool = False,
         augment: bool = False,
     ):
         """
@@ -16,12 +20,21 @@ class ZarrDataset(Dataset):
         -----
             zarr_path: zarr file path
             dtype: output tensor data type
+            gradient: whether to add gradient feature to gravity data
+            frequency: whether to add frequency feature to gravity data
+            normalize: whether to apply normalization to gradient feature / frequency feature
+            noise: whether to apply noise to data
             augment: whether to apply left-right flip augmentation
         """
         zarr_file = zarr.open(zarr_path, mode="r")
         self.density = zarr_file["density"]
         self.gravity = zarr_file["gravity_config1"]
         self.dtype = dtype
+
+        self.gradient = gradient
+        self.frequency = frequency
+        self.normalize = normalize
+        self.noise = noise
         self.augment = augment
 
         self.density_shape = self.density.shape[-2:] # [nz, nx]
@@ -33,17 +46,19 @@ class ZarrDataset(Dataset):
         data = self.gravity[idx]
         data = torch.from_numpy(data).to(self.dtype)
         data = self.gravity_interpolate(data) # [channels, nx]
-        # data = self.gravity_normalize(data) # [channels, nx]
-        # data = self.gravity_add_noise(data) # [channels, nx]
+        if self.gradient:
+            data = self.gravity_add_gradient(data) # [3 * channels, nx]
+        if self.normalize:
+            data = self.gravity_normalize(data) # [channels, nx]
+        if self.noise:
+            data = self.gravity_add_noise(data) # [channels, nx]
 
         label = self.density[idx]
         label = torch.from_numpy(label).to(self.dtype) # [nz, nx]
         label = label.unsqueeze(0) # [1, nz, nx]
 
-        # left-right flip augmentation (along nx axis)
-        if self.augment and torch.rand(1).item() > 0.5:
-            data = torch.flip(data, dims=[-1])
-            label = torch.flip(label, dims=[-1])
+        if self.augment:
+            data, label = self.gravity_density_augment(data, label)
 
         return data, label
 
@@ -59,22 +74,61 @@ class ZarrDataset(Dataset):
         ).squeeze(0)
         return interpolated_data
 
-    # def gravity_normalize(self, data: torch.Tensor) -> torch.Tensor:
-    #     """
-    #     return normalized gravity data
-    #     """
-    #     # z-score normalize
-    #     # return (data - data.mean()) / (data.std() + 1e-8)
+    def gravity_normalize(self, data: torch.Tensor) -> torch.Tensor:
+        """
+        return normalized gravity data
+        """
+        # z-score normalize
+        return (data - data.mean()) / (data.std() + 1e-8)
         
-    #     # min-max normalize
-    #     # return (data - data.min()) / (data.max() - data.min() + 1e-8)
+        # min-max normalize
+        # return (data - data.min()) / (data.max() - data.min() + 1e-8)
 
-    # def gravity_add_noise(self, data: torch.Tensor) -> torch.Tensor:
-    #     """
-    #     add 5% Gaussian noise to gravity data (noise std = 5% of data std)
-    #     """
-    #     noise = torch.randn_like(data) * 0.05 * data.std()
-    #     return data + noise
+    def gravity_add_noise(self, data: torch.Tensor) -> torch.Tensor:
+        """
+        add 5% Gaussian noise to gravity data (noise std = 5% of data std)
+        """
+        noise = torch.randn_like(data) * 0.05 * data.std()
+        return data + noise
+
+    def gravity_density_augment(self, data: torch.Tensor, label: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        apply density augmentation to gravity data
+        """
+        # 50% probability left-right flip augmentation (along nx axis)
+        if torch.rand(1).item() > 0.5:
+            data = torch.flip(data, dims=[-1])
+            label = torch.flip(label, dims=[-1])
+        return data, label
+
+    def gravity_add_gradient(self, data: torch.Tensor) -> torch.Tensor:
+        """
+        add first and second order horizontal gradients to gravity data
+        """
+        # input shape: [channels, nx]
+        # output shape: [channels*3, nx]
+        dx = torch.gradient(data, dim=-1)[0]
+        dxx = torch.gradient(dx, dim=-1)[0]
+
+        # normalize gradient
+        dx = (dx - dx.mean()) / (dx.std() + 1e-8)
+        dxx = (dxx - dxx.mean()) / (dxx.std() + 1e-8)
+
+        return torch.cat([data, dx, dxx], dim=0)
+    
+    def gravity_add_frequency_feature(self, data: torch.Tensor) -> torch.Tensor:
+        """
+        add frequency feature to gravity data
+        """
+        fft_data = torch.fft.fft(data, dim=-1)
+        amplitude = torch.abs(fft_data) # shape: [channels, nx//2+1]
+        phase = torch.angle(fft_data) # shape: [channels, nx//2+1]
+        
+        # interpolate amplitude and phase to match nx shape
+        amplitude = F.interpolate(amplitude.unsqueeze(0), size=data.shape[-1], mode="linear", align_corners=True).squeeze(0)
+        phase = F.interpolate(phase.unsqueeze(0), size=data.shape[-1], mode="linear", align_corners=True).squeeze(0)
+        
+        return torch.cat([data, amplitude, phase], dim=0)
 
 def zarr_dataloader(
     zarr_path: str,
@@ -98,8 +152,8 @@ def zarr_dataloader(
     --------
         Tuple[train_loader, val_loader, test_loader]
     """
-    train_base = ZarrDataset(zarr_path, dtype=dtype, augment=True)
-    val_base = ZarrDataset(zarr_path, dtype=dtype, augment=False)
+    train_base = ZarrDataset(zarr_path, dtype=dtype, gradient=True)
+    val_base = ZarrDataset(zarr_path, dtype=dtype, gradient=True)
 
     n = len(train_base)
     train_end = int(n * 0.6)

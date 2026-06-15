@@ -111,8 +111,14 @@ def load_test_results(src_dir:str, max_vis:int, dst_dir:str=None):
 if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     src_dirs = [
-        r".\test_results\geo_model\best_model",
-        r".\test_results\geo_model\last_model"
+        r".\test_results\geo_model\z-score\best_model",
+        r".\test_results\geo_model\z-score\last_model",
+        r".\test_results\geo_model\min-max\best_model",
+        r".\test_results\geo_model\min-max\last_model",
+        r".\test_results\geo_model\noise\best_model",
+        r".\test_results\geo_model\noise\last_model",
+        r".\test_results\geo_model\augment\best_model",
+        r".\test_results\geo_model\augment\last_model",
     ]
 
     max_vis = 100
