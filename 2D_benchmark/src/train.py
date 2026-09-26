@@ -1,0 +1,295 @@
+import os
+import torch
+import numpy as np
+from tqdm import tqdm
+from torch import nn, optim
+from torch.utils.data import DataLoader
+from torch.nn.utils import clip_grad_norm_
+from typing import List
+
+from .utils import set_seed, Logger
+from .dataloader import dataset_path, ZarrDataloader
+from .model import get_model, save_checkpoint, load_checkpoint
+from .loss import CombinedLoss
+from .evaluate import CombinedMetric
+
+def main_train(
+    save_dir: str,
+    device: str,
+    max_epoch: int = 200,
+    batch_size: int = 32,
+    num_workers: int = 0,
+    model_type: str = "unet",
+    model_kwargs: dict = {"in_channels": 2, "out_channels": 128, "bilinear": False},
+    model_checkpoint: str = None,
+):
+    """
+    Main function for training the model.
+
+    Parameters
+    ----------
+    save_dir (str): directory to save the model checkpoints and test results.
+    device (str): device to use for training.
+    max_epoch (int): maximum number of epochs to train, default is 200.
+    batch_size (int): batch size for dataloader, default is 32.
+    num_workers (int): number of workers for dataloader, default is 0.
+    model_type (str): model to use for training, default is "unet".
+    model_kwargs (dict): keyword arguments for the model, default is UNet kwargs.
+    model_checkpoint (str): path to the model checkpoint to load, default is None.
+    """
+    set_seed()
+
+    # save directory
+    save_dir_log = os.path.join(save_dir, "log")
+    save_dir_checkpoints = os.path.join(save_dir, "checkpoints")
+    save_dir_test_results = os.path.join(save_dir, "test_results")
+    os.makedirs(save_dir_log, exist_ok=True)
+    os.makedirs(save_dir_checkpoints, exist_ok=True)
+    os.makedirs(save_dir_test_results, exist_ok=True)
+
+    # logger
+    logger = Logger(
+        log_dir=save_dir_log,
+        project="Gravity_Dataset_Benchmark", 
+        workspace="sjq"
+    )
+
+    # device
+    device = torch.device(device)
+    print(f"Using device: {device}")
+
+    # dataloaders
+    dataloaders = [
+        ZarrDataloader(
+            zarr_path = zarr_path,
+            batch_size = batch_size,
+            num_workers = num_workers,
+        ) for _, zarr_path in dataset_path("geo_model").items()
+    ]
+
+    train_loader = ZarrDataloader.merge(
+        datasets = [dataloader.train_dataset for dataloader in dataloaders],
+        batch_size = batch_size,
+        shuffle = True,
+        num_workers = num_workers,
+    )
+
+    val_loader = ZarrDataloader.merge(
+        datasets = [dataloader.val_dataset for dataloader in dataloaders],
+        batch_size = batch_size,
+        shuffle = False,
+        num_workers = num_workers,
+    )
+
+    # model
+    model = get_model(model_type, model_kwargs)
+    model.to(device)
+    if model_checkpoint is not None:
+        load_checkpoint(
+            checkpoint_path = model_checkpoint,
+            model = model,
+            device = device,
+        )
+
+    # loss
+    train_criterion = CombinedLoss(
+        huber_weight=1.0,
+        depth_weight=1.0, 
+        ssim_weight=0.01,
+        tv_weight=0.01,
+        ms_weight=0.01,
+        mgs_weight=0.01,
+    )
+    val_criterion = CombinedLoss.copy(train_criterion)
+    test_criterion = CombinedLoss.copy(train_criterion)
+
+    # metric
+    train_metric = CombinedMetric(
+        mae_weight=0.4,
+        psnr_weight=0.4,
+        ssim_weight=0.2,
+        mae_scale=1.0,
+        psnr_scale=100.0,
+    )
+    val_metric = CombinedMetric.copy(train_metric)
+    test_metric = CombinedMetric.copy(train_metric)
+
+    # optimizer
+    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    
+    # scheduler
+    scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        optimizer, T_0=20, T_mult=2, eta_min=1e-6, last_epoch=-1,
+    )
+
+    # loop
+    save_interval = 20
+    patience = 20
+    epochs_without_improvement = 0
+    for epoch in range(max_epoch):
+        print(f"Epoch {epoch}")
+
+        # =============== training ==============
+        _train_one_epoch(
+            model = model, 
+            train_loader = train_loader,
+            optimizer = optimizer,
+            criterion = train_criterion,
+            metric = train_metric,
+            device = device
+        )
+        logger.log_scalars({"train_lr": optimizer.param_groups[0]["lr"]}, epoch)
+        scheduler.step()
+        logger.log_scalars(train_criterion.value_dict("train"), epoch)
+        logger.log_scalars(train_metric.value_dict("train"), epoch)
+        train_criterion.reset()
+        train_metric.reset()
+
+        # =============== validation ==============
+        _validate(
+            model = model,
+            val_loader = val_loader,
+            criterion = val_criterion,
+            metric = val_metric,
+            device = device,
+        )
+        logger.log_scalars(val_criterion.value_dict("val"), epoch)
+        logger.log_scalars(val_metric.value_dict("val"), epoch)
+
+        # model selection
+        # early stopping on the validation metric
+        if val_metric.is_better():
+            if val_metric.best_metric_value is None:
+                print(f"First validation metric: {val_metric.metric():.6f}, saving best checkpoint")
+            else:
+                print(f"Validation metric improved from {val_metric.best_metric_value:.6f} to {val_metric.metric():.6f}, saving best checkpoint")
+            val_metric.update_best()
+            save_checkpoint(
+                epoch = epoch,
+                model = model,
+                metric_value_dict = val_metric.value_dict("val"),
+                criterion_value_dict = val_criterion.value_dict("val"),
+                path = os.path.join(save_dir_checkpoints, "best.pth"),
+            )
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+        # periodic checkpoint
+        if epoch % save_interval == 0:
+            print(f"Saving checkpoint at epoch {epoch}")
+            save_checkpoint(
+                epoch = epoch,
+                model = model,
+                metric_value_dict = val_metric.value_dict("val"),
+                criterion_value_dict = val_criterion.value_dict("val"),
+                path = os.path.join(save_dir_checkpoints, f"epoch_{epoch:03d}.pth"),
+            )
+
+        val_criterion.reset()
+        val_metric.reset()
+
+        if epochs_without_improvement >= patience:
+            print(f"Early stopping at epoch {epoch}, best metric {val_metric.best_metric_value:.6f}")
+            break
+
+    # test with the best checkpoint
+    load_checkpoint(
+        checkpoint_path = os.path.join(save_dir_checkpoints, "best.pth"),
+        model = model,
+        device = device,
+    )
+    _testify(
+        model = model,
+        zarr_dataloaders = dataloaders,
+        criterion = test_criterion,
+        metric = test_metric,
+        save_dir = save_dir_test_results,
+        device = device,
+        logger = logger,
+    )
+
+def _train_one_epoch(
+    model: nn.Module,
+    train_loader: DataLoader,
+    optimizer: optim.Optimizer,
+    criterion: CombinedLoss,
+    metric: CombinedMetric,
+    device: str,
+) -> None:
+    model.train()
+    for gravity, density in tqdm(train_loader, desc="train"):
+        gravity = gravity.to(device)
+        density = density.to(device)
+        density_pred = model(gravity)
+        loss = criterion(density_pred, density)
+        with torch.no_grad():
+            # record metrics on the detached prediction
+            metric(density_pred, density)
+        optimizer.zero_grad()
+        loss.backward()
+        clip_grad_norm_(model.parameters(), max_norm=1.0, norm_type=2)
+        optimizer.step()
+
+
+def _validate(
+    model: nn.Module,
+    val_loader: DataLoader,
+    criterion: CombinedLoss,
+    metric: CombinedMetric,
+    device: str,
+) -> None:
+    model.eval()
+    with torch.no_grad():
+        for gravity, density in tqdm(val_loader, desc="val"):
+            gravity = gravity.to(device)
+            density = density.to(device)
+            density_pred = model(gravity)
+            criterion(density_pred, density)
+            metric(density_pred, density)
+
+def _testify(
+    model: nn.Module,
+    zarr_dataloaders: List[ZarrDataloader],
+    criterion: CombinedLoss,
+    metric: CombinedMetric,
+    save_dir: str,
+    device: str,
+    logger: Logger,
+    max_vis: int = 100,
+) -> dict:
+    model.eval()
+    with torch.no_grad():
+        for zarr_dataloader in zarr_dataloaders:
+            zarr_name = zarr_dataloader.zarr_name
+            test_loader = zarr_dataloader.test_loader
+
+            criterion.reset()
+            metric.reset()
+
+            save_gravity = []
+            save_density = []
+            save_pred = []
+            saved = 0
+            for gravity, density in tqdm(test_loader, desc=f"test {zarr_name}"):
+                gravity = gravity.to(device)
+                density = density.to(device)
+                density_pred = model(gravity)
+                criterion(density_pred, density)
+                metric(density_pred, density)
+
+                if saved < max_vis:
+                    take = min(max_vis - saved, gravity.shape[0])
+                    save_gravity.append(gravity[:take].cpu().numpy())
+                    save_density.append(density[:take].cpu().numpy())
+                    save_pred.append(density_pred[:take].cpu().numpy())
+                    saved += take
+
+            np.savez(
+                os.path.join(save_dir, f"{zarr_name}.npz"),
+                gravity = np.concatenate(save_gravity),
+                density = np.concatenate(save_density),
+                density_pred = np.concatenate(save_pred),
+            )
+            logger.log_scalars(criterion.value_dict(f"test {zarr_name}"), 0)
+            logger.log_scalars(metric.value_dict(f"test {zarr_name}"), 0)
