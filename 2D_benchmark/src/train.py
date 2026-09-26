@@ -97,24 +97,22 @@ def main_train(
     train_criterion = CombinedLoss(
         huber_weight=1.0,
         depth_weight=1.0, 
-        ssim_weight=0.01,
-        tv_weight=0.01,
-        ms_weight=0.01,
-        mgs_weight=0.01,
+        ssim_weight=0.03,
+        tv_weight=0.03,
+        ms_weight=0.03,
+        mgs_weight=0.03,
+        data_range=1.0,
     )
-    val_criterion = CombinedLoss.copy(train_criterion)
-    test_criterion = CombinedLoss.copy(train_criterion)
 
     # metric
-    train_metric = CombinedMetric(
-        mae_weight=0.4,
-        psnr_weight=0.4,
-        ssim_weight=0.2,
-        mae_scale=1.0,
-        psnr_scale=100.0,
+    val_metric = CombinedMetric(
+        mae_weight=1.0,
+        psnr_weight=0.5,
+        ssim_weight=0.3,
+        psnr_max=20.0,
+        data_range=1.0,
     )
-    val_metric = CombinedMetric.copy(train_metric)
-    test_metric = CombinedMetric.copy(train_metric)
+    test_metric = val_metric.copy()
 
     # optimizer
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -147,25 +145,20 @@ def main_train(
             train_loader = train_loader,
             optimizer = optimizer,
             criterion = train_criterion,
-            metric = train_metric,
             device = device
         )
-        logger.log_scalars({"train/lr": optimizer.param_groups[0]["lr"]}, epoch)
+        logger.log_scalars({"lr": optimizer.param_groups[0]["lr"]}, epoch)
         scheduler.step()
         logger.log_scalars(train_criterion.value_dict("train"), epoch)
-        logger.log_scalars(train_metric.value_dict("train"), epoch)
         train_criterion.reset()
-        train_metric.reset()
 
         # =============== validation ==============
         _validate(
             model = model,
             val_loader = val_loader,
-            criterion = val_criterion,
             metric = val_metric,
             device = device,
         )
-        logger.log_scalars(val_criterion.value_dict("val"), epoch)
         logger.log_scalars(val_metric.value_dict("val"), epoch)
 
         # model selection
@@ -180,7 +173,6 @@ def main_train(
                 epoch = epoch,
                 model = model,
                 metric_value_dict = val_metric.value_dict("val"),
-                criterion_value_dict = val_criterion.value_dict("val"),
                 path = os.path.join(save_dir_checkpoints, "best.pth"),
             )
             epochs_without_improvement = 0
@@ -194,11 +186,9 @@ def main_train(
                 epoch = epoch,
                 model = model,
                 metric_value_dict = val_metric.value_dict("val"),
-                criterion_value_dict = val_criterion.value_dict("val"),
                 path = os.path.join(save_dir_checkpoints, f"epoch_{epoch:03d}.pth"),
             )
 
-        val_criterion.reset()
         val_metric.reset()
 
         if epochs_without_improvement >= patience:
@@ -214,7 +204,6 @@ def main_train(
     _testify(
         model = model,
         zarr_dataloaders = dataloaders,
-        criterion = test_criterion,
         metric = test_metric,
         save_dir = save_dir_test_results,
         device = device,
@@ -226,7 +215,6 @@ def _train_one_epoch(
     train_loader: DataLoader,
     optimizer: optim.Optimizer,
     criterion: CombinedLoss,
-    metric: CombinedMetric,
     device: str,
 ) -> None:
     model.train()
@@ -235,9 +223,6 @@ def _train_one_epoch(
         density = density.to(device)
         density_pred = model(gravity)
         loss = criterion(density_pred, density)
-        with torch.no_grad():
-            # record metrics on the detached prediction
-            metric(density_pred, density)
         optimizer.zero_grad()
         loss.backward()
         clip_grad_norm_(model.parameters(), max_norm=1.0, norm_type=2)
@@ -247,7 +232,6 @@ def _train_one_epoch(
 def _validate(
     model: nn.Module,
     val_loader: DataLoader,
-    criterion: CombinedLoss,
     metric: CombinedMetric,
     device: str,
 ) -> None:
@@ -257,13 +241,11 @@ def _validate(
             gravity = gravity.to(device)
             density = density.to(device)
             density_pred = model(gravity)
-            criterion(density_pred, density)
             metric(density_pred, density)
 
 def _testify(
     model: nn.Module,
     zarr_dataloaders: List[ZarrDataloader],
-    criterion: CombinedLoss,
     metric: CombinedMetric,
     save_dir: str,
     device: str,
@@ -276,7 +258,6 @@ def _testify(
             zarr_name = zarr_dataloader.zarr_name
             test_loader = zarr_dataloader.test_dataloader
 
-            criterion.reset()
             metric.reset()
 
             save_gravity = []
@@ -287,7 +268,6 @@ def _testify(
                 gravity = gravity.to(device)
                 density = density.to(device)
                 density_pred = model(gravity)
-                criterion(density_pred, density)
                 metric(density_pred, density)
 
                 if saved < max_vis:
@@ -303,5 +283,4 @@ def _testify(
                 density = np.concatenate(save_density),
                 density_pred = np.concatenate(save_pred),
             )
-            logger.log_scalars(criterion.value_dict(f"{zarr_name}"), 0)
             logger.log_scalars(metric.value_dict(f"{zarr_name}"), 0)

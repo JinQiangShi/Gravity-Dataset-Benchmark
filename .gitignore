@@ -1,3 +1,4 @@
 .venv
 __pycache__/
 2D_benchmark/unet/*
+2D_benchmark/huoqiu_unet_test

@@ -17,8 +17,10 @@ class CombinedLoss(nn.Module):
         tv_weight: float = 0.01, 
         ms_weight: float = 0.01, 
         mgs_weight: float = 0.01, 
+        data_range: float = 1.0,
     ):
         super(CombinedLoss, self).__init__()
+        self.data_range = data_range
         self.huber_loss = HuberLoss()
         self.huber_weight = huber_weight
         self.total_huber_loss_value = 0.0
@@ -29,7 +31,7 @@ class CombinedLoss(nn.Module):
         self.total_depth_loss_value = 0.0
         self.avg_depth_loss_value = 0.0
 
-        self.ssim_loss = SSIMLoss()
+        self.ssim_loss = SSIMLoss(data_range=data_range)
         self.ssim_weight = ssim_weight
         self.total_ssim_loss_value = 0.0
         self.avg_ssim_loss_value = 0.0
@@ -54,15 +56,15 @@ class CombinedLoss(nn.Module):
 
         self.batch_num = 0
 
-    @classmethod
-    def copy(cls, other: "CombinedLoss") -> "CombinedLoss":
-        return cls(
-            huber_weight=other.huber_weight,
-            depth_weight=other.depth_weight,
-            ssim_weight=other.ssim_weight,
-            tv_weight=other.tv_weight,
-            ms_weight=other.ms_weight,
-            mgs_weight=other.mgs_weight,
+    def copy(self) -> "CombinedLoss":
+        return CombinedLoss(
+            huber_weight=self.huber_weight,
+            depth_weight=self.depth_weight,
+            ssim_weight=self.ssim_weight,
+            tv_weight=self.tv_weight,
+            ms_weight=self.ms_weight,
+            mgs_weight=self.mgs_weight,
+            data_range=self.data_range,
         )
 
     def forward(self, pred, target):
@@ -93,6 +95,8 @@ class CombinedLoss(nn.Module):
         return loss
 
     def update_avg(self):
+        if self.batch_num == 0:
+            return
         self.avg_loss_value = self.total_loss_value / self.batch_num
         self.avg_huber_loss_value = self.total_huber_loss_value / self.batch_num
         self.avg_depth_loss_value = self.total_depth_loss_value / self.batch_num
