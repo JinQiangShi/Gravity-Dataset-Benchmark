@@ -19,7 +19,6 @@ class ZarrDataloader:
         self.batch_size = batch_size
         self.zarr_name = os.path.splitext(os.path.basename(zarr_path))[0]
         self._init_dataset()
-        self._init_dataloader()
 
     def _init_dataset(self):
         n = len(self.dataset)
@@ -30,22 +29,27 @@ class ZarrDataloader:
         self.val_dataset = Subset(self.dataset, range(train_end, val_end))
         self.test_dataset = Subset(self.dataset, range(val_end, n))
 
-    def _init_dataloader(self):
-        self.train_loader = DataLoader(
+    @property
+    def train_dataloader(self):
+        return DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,
         )
-
-        self.val_loader = DataLoader(
+    
+    @property
+    def val_dataloader(self):
+        return DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.num_workers,
         )
-
-        self.test_loader = DataLoader(
+    
+    @property
+    def test_dataloader(self):
+        return DataLoader(
             self.test_dataset,
             batch_size=self.batch_size,
             shuffle=False,

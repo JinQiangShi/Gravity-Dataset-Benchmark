@@ -72,13 +72,10 @@ class Up(nn.Module):
 class OutConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(OutConv, self).__init__()
-        mid_channels = (in_channels + out_channels) // 2
+
         self.out_block = nn.Sequential(
-            nn.Conv2d(in_channels, mid_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(mid_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(mid_channels, out_channels, kernel_size=1, bias=False),
-            nn.Softplus() 
+            nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=True),
+            nn.Softplus()
             # softplus activation motivated by
             # Deep Learning-Based 3D Gravity Inversion: A Comparative Analysis of CNN Architectures for Density Estimation
         )

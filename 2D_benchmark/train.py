@@ -9,6 +9,7 @@ if __name__ == "__main__":
         device = "cuda",
         max_epoch = 200,
         batch_size = 32,
+        learning_rate = 1e-3,
         model_type = "unet",
         model_kwargs = {
             "in_channels": 2,

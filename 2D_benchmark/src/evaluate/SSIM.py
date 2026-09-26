@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class SSIM(nn.Module):
-    def __init__(self, window_size=11, sigma=1.5, data_range=None, k1=0.01, k2=0.03):
+    def __init__(self, window_size=7, sigma=1.5, data_range=None, k1=0.01, k2=0.03):
         super(SSIM, self).__init__()
         self.window_size = window_size
         self.sigma = sigma

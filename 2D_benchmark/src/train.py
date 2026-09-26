@@ -19,6 +19,7 @@ def main_train(
     max_epoch: int = 200,
     batch_size: int = 32,
     num_workers: int = 0,
+    learning_rate: float = 1e-3,
     model_type: str = "unet",
     model_kwargs: dict = {"in_channels": 2, "out_channels": 128, "bilinear": False},
     model_checkpoint: str = None,
@@ -33,6 +34,7 @@ def main_train(
     max_epoch (int): maximum number of epochs to train, default is 200.
     batch_size (int): batch size for dataloader, default is 32.
     num_workers (int): number of workers for dataloader, default is 0.
+    learning_rate (float): learning rate for optimizer, default is 1e-3.
     model_type (str): model to use for training, default is "unet".
     model_kwargs (dict): keyword arguments for the model, default is UNet kwargs.
     model_checkpoint (str): path to the model checkpoint to load, default is None.
@@ -115,18 +117,28 @@ def main_train(
     test_metric = CombinedMetric.copy(train_metric)
 
     # optimizer
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
     # scheduler
-    scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
-        optimizer, T_0=20, T_mult=2, eta_min=1e-6, last_epoch=-1,
+    warmup_epochs = 20
+    scheduler = optim.lr_scheduler.SequentialLR(
+        optimizer,
+        schedulers=[
+            optim.lr_scheduler.LinearLR(
+                optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_epochs,
+            ),
+            optim.lr_scheduler.CosineAnnealingWarmRestarts(
+                optimizer, T_0=20, T_mult=2, eta_min=1e-6,
+            ),
+        ],
+        milestones=[warmup_epochs],
     )
 
     # loop
     save_interval = 20
     patience = 20
     epochs_without_improvement = 0
-    for epoch in range(max_epoch):
+    for epoch in range(1, max_epoch+1):
         print(f"Epoch {epoch}")
 
         # =============== training ==============
@@ -138,7 +150,7 @@ def main_train(
             metric = train_metric,
             device = device
         )
-        logger.log_scalars({"train_lr": optimizer.param_groups[0]["lr"]}, epoch)
+        logger.log_scalars({"train/lr": optimizer.param_groups[0]["lr"]}, epoch)
         scheduler.step()
         logger.log_scalars(train_criterion.value_dict("train"), epoch)
         logger.log_scalars(train_metric.value_dict("train"), epoch)
@@ -262,7 +274,7 @@ def _testify(
     with torch.no_grad():
         for zarr_dataloader in zarr_dataloaders:
             zarr_name = zarr_dataloader.zarr_name
-            test_loader = zarr_dataloader.test_loader
+            test_loader = zarr_dataloader.test_dataloader
 
             criterion.reset()
             metric.reset()
@@ -291,5 +303,5 @@ def _testify(
                 density = np.concatenate(save_density),
                 density_pred = np.concatenate(save_pred),
             )
-            logger.log_scalars(criterion.value_dict(f"test {zarr_name}"), 0)
-            logger.log_scalars(metric.value_dict(f"test {zarr_name}"), 0)
+            logger.log_scalars(criterion.value_dict(f"{zarr_name}"), 0)
+            logger.log_scalars(metric.value_dict(f"{zarr_name}"), 0)

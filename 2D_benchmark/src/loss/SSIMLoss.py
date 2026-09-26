@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class SSIMLoss(nn.Module):
-    def __init__(self, window_size=11, sigma=1.5, data_range=None, k1=0.01, k2=0.03):
+    def __init__(self, window_size=7, sigma=1.5, data_range=None, k1=0.01, k2=0.03):
         super(SSIMLoss, self).__init__()
         self.window_size = window_size
         self.sigma = sigma
@@ -52,5 +52,4 @@ class SSIMLoss(nn.Module):
 
         ssim_map = numerator / denominator
 
-        # Loss = 1 - mean SSIM, so minimizing it maximizes structural similarity
-        return 1.0 - ssim_map.mean()
+        return ssim_map.mean()

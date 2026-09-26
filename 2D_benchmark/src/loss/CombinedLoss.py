@@ -69,7 +69,7 @@ class CombinedLoss(nn.Module):
         # calculate each loss component
         huber_loss_value = self.huber_loss(pred, target)
         depth_loss_value = self.depth_loss(pred, target)
-        ssim_loss_value = self.ssim_loss(pred, target)
+        ssim_loss_value = 1.0 - self.ssim_loss(pred, target)
         tv_loss_value = self.tv_loss(pred)
         ms_loss_value = self.ms_loss(pred)
         mgs_loss_value = self.mgs_loss(pred)
@@ -104,13 +104,13 @@ class CombinedLoss(nn.Module):
     def value_dict(self, prefix: str = "train") -> dict:
         self.update_avg()
         return {
-            f"{prefix}_total_loss": self.avg_loss_value,
-            f"{prefix}_huber_loss": self.avg_huber_loss_value,
-            f"{prefix}_depth_loss": self.avg_depth_loss_value,
-            f"{prefix}_ssim_loss": self.avg_ssim_loss_value,
-            f"{prefix}_tv_loss": self.avg_tv_loss_value,
-            f"{prefix}_ms_loss": self.avg_ms_loss_value,
-            f"{prefix}_mgs_loss": self.avg_mgs_loss_value,
+            f"{prefix}/loss/total": self.avg_loss_value,
+            f"{prefix}/loss/huber": self.avg_huber_loss_value,
+            f"{prefix}/loss/depth": self.avg_depth_loss_value,
+            f"{prefix}/loss/ssim": self.avg_ssim_loss_value,
+            f"{prefix}/loss/tv": self.avg_tv_loss_value,
+            f"{prefix}/loss/ms": self.avg_ms_loss_value,
+            f"{prefix}/loss/mgs": self.avg_mgs_loss_value,
         }
 
 

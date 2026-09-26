@@ -12,7 +12,7 @@ class CombinedMetric(nn.Module):
         psnr_weight: float = 0.4,
         ssim_weight: float = 0.2,
         mae_scale: float = 1.0,
-        psnr_scale: float = 100.0,
+        psnr_scale: float = 20.0,
     ):
         super(CombinedMetric, self).__init__()
         self.mae_weight = mae_weight
@@ -49,8 +49,8 @@ class CombinedMetric(nn.Module):
 
     def forward(self, pred, target):
         mae_value = self.mae_metric(pred, target)
-        psnr_value = self.psnr_metric(pred, target)
-        ssim_value = self.ssim_metric(pred, target)
+        psnr_value = 20.0 - self.psnr_metric(pred, target)
+        ssim_value = 1.0 - self.ssim_metric(pred, target)
         # update class attributes
         self.total_mae_value += mae_value.item()
         self.total_psnr_value += psnr_value.item()
@@ -66,8 +66,8 @@ class CombinedMetric(nn.Module):
     def metric(self) -> float:
         return (
             self.mae_weight * (self.avg_mae_value / self.mae_scale)
-            - self.psnr_weight * (self.avg_psnr_value / self.psnr_scale)
-            - self.ssim_weight * self.avg_ssim_value
+            + self.psnr_weight * (self.avg_psnr_value / self.psnr_scale)
+            + self.ssim_weight * self.avg_ssim_value
         )
 
     def is_better(self) -> bool:
@@ -83,10 +83,10 @@ class CombinedMetric(nn.Module):
     def value_dict(self, prefix: str = "val") -> dict:
         self.update_avg()
         return {
-            f"{prefix}_mae": self.avg_mae_value,
-            f"{prefix}_psnr": self.avg_psnr_value,
-            f"{prefix}_ssim": self.avg_ssim_value,
-            f"{prefix}_metric": self.metric(),
+            f"{prefix}/metric/mae": self.avg_mae_value,
+            f"{prefix}/metric/psnr": self.avg_psnr_value,
+            f"{prefix}/metric/ssim": self.avg_ssim_value,
+            f"{prefix}/metric/combined": self.metric(),
         }
 
     def reset(self):
