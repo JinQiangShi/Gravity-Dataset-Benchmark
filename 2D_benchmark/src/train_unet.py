@@ -20,7 +20,6 @@ def train_unet(
     batch_size: int = 32,
     num_workers: int = 0,
     learning_rate: float = 1e-3,
-    model_type: str = "unet",
     model_kwargs: dict = {"in_channels": 2, "out_channels": 128, "bilinear": False},
     model_checkpoint: str = None,
 ):
@@ -35,7 +34,6 @@ def train_unet(
     batch_size (int): batch size for dataloader, default is 32.
     num_workers (int): number of workers for dataloader, default is 0.
     learning_rate (float): learning rate for optimizer, default is 1e-3.
-    model_type (str): model to use for training, default is "unet".
     model_kwargs (dict): keyword arguments for the model, default is UNet kwargs.
     model_checkpoint (str): path to the model checkpoint to load, default is None.
     """
@@ -84,7 +82,7 @@ def train_unet(
     )
 
     # model
-    model = get_model(model_type, model_kwargs)
+    model = get_model("unet", model_kwargs)
     model.to(device)
     if model_checkpoint is not None:
         load_checkpoint(
