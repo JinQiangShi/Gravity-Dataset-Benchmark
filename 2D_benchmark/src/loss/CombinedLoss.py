@@ -71,14 +71,14 @@ class CombinedLoss(nn.Module):
         # calculate each loss component
         huber_loss_value = self.huber_loss(pred, target)
         depth_loss_value = self.depth_loss(pred, target)
-        ssim_loss_value = 1.0 - self.ssim_loss(pred, target)
+        ssim_loss_value = self.ssim_loss(pred, target)
         tv_loss_value = self.tv_loss(pred)
         ms_loss_value = self.ms_loss(pred)
         mgs_loss_value = self.mgs_loss(pred)
         # calculate total loss
         loss = self.huber_weight * huber_loss_value
         loss += self.depth_weight * depth_loss_value
-        loss += self.ssim_weight * ssim_loss_value
+        loss += self.ssim_weight * (1.0 - ssim_loss_value)
         loss += self.tv_weight * tv_loss_value
         loss += self.ms_weight * ms_loss_value
         loss += self.mgs_weight * mgs_loss_value

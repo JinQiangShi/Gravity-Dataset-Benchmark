@@ -48,10 +48,8 @@ class CombinedMetric(nn.Module):
 
     def forward(self, pred, target):
         mae_value = self.mae_metric(pred, target)
-        # normalize psnr into a "lower is better" value in (0, 1]
-        psnr_raw = self.psnr_metric(pred, target)
-        psnr_value = 1.0 - psnr_raw / self.psnr_max
-        ssim_value = 1.0 - self.ssim_metric(pred, target)
+        psnr_value = self.psnr_metric(pred, target)
+        ssim_value = self.ssim_metric(pred, target)
         # update class attributes
         self.total_mae_value += mae_value.item()
         self.total_psnr_value += psnr_value.item()
@@ -68,8 +66,8 @@ class CombinedMetric(nn.Module):
         self.update_avg()
         return (
             self.mae_weight * self.avg_mae_value
-            + self.psnr_weight * self.avg_psnr_value
-            + self.ssim_weight * self.avg_ssim_value
+            + self.psnr_weight * (1.0 - self.avg_psnr_value / self.psnr_max)
+            + self.ssim_weight * (1.0 - self.avg_ssim_value)
         )
 
     def is_better(self) -> bool:

@@ -43,8 +43,8 @@ def main_train(
 
     # save directory
     save_dir_log = os.path.join(save_dir, "log")
-    save_dir_checkpoints = os.path.join(save_dir, "checkpoints")
-    save_dir_test_results = os.path.join(save_dir, "test_results")
+    save_dir_checkpoints = os.path.join(save_dir, "checkpoint")
+    save_dir_test_results = os.path.join(save_dir, "test_result")
     os.makedirs(save_dir_log, exist_ok=True)
     os.makedirs(save_dir_checkpoints, exist_ok=True)
     os.makedirs(save_dir_test_results, exist_ok=True)
@@ -209,6 +209,10 @@ def main_train(
         device = device,
         logger = logger,
     )
+
+    # visualize
+    # Commented out because the visualization library causes an OpenMP library conflict 
+    # Need to run the visualization script separately
 
 def _train_one_epoch(
     model: nn.Module,

@@ -37,3 +37,7 @@ class Logger:
 
     def close(self):
         self._swanlab.finish()
+
+def extract_file_name(file_path: str):
+    """Extract the file name from a file path."""
+    return os.path.basename(file_path).split(".")[0]
