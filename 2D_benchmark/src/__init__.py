@@ -1,7 +1,7 @@
-from .train import main_train
+from .train_unet import train_unet
 from .visualize import visualize
 
 __all__ = [
-    "main_train",
+    "train_unet",
     "visualize",
 ]

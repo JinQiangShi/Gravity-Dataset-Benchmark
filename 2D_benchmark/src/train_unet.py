@@ -13,7 +13,7 @@ from .model import get_model, save_checkpoint, load_checkpoint
 from .loss import CombinedLoss
 from .evaluate import CombinedMetric
 
-def main_train(
+def train_unet(
     save_dir: str,
     device: str,
     max_epoch: int = 200,
