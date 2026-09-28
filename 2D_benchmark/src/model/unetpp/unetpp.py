@@ -117,13 +117,18 @@ class GravityInverseUNetPlusPlus2D(nn.Module):
         x1_3 = self.conv1_3(torch.cat([x1_0, x1_1, x1_2, self.up2(x2_2)], 1)) # (batch, 128, nx//2)
         x0_4 = self.conv0_4(torch.cat([x0_0, x0_1, x0_2, x0_3, self.up1(x1_3)], 1)) # (batch, 64, nx)
 
-        if self.deep_supervision:
+        if self.deep_supervision and self.training:
+            # when training, return all layers' outputs
             output1 = self.final1(x0_1) # (batch, 1, out_channels, nx) <=> (batch, 1, nz, nx)
             output2 = self.final2(x0_2) # (batch, 1, out_channels, nx)
             output3 = self.final3(x0_3) # (batch, 1, out_channels, nx)
             output4 = self.final4(x0_4) # (batch, 1, out_channels, nx)
             return [output1, output2, output3, output4]
+        elif self.deep_supervision:
+            # when eval, only return the last layer output
+            return self.final4(x0_4) # (batch, 1, out_channels, nx)
         else:
+            # when not deep supervision, return the final output
             output = self.final(x0_4) # (batch, 1, out_channels, nx)
             return output
        

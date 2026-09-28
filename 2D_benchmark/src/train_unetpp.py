@@ -13,14 +13,14 @@ from .model import get_model, save_checkpoint, load_checkpoint
 from .loss import CombinedLoss
 from .evaluate import CombinedMetric
 
-def train_unet(
+def train_unetpp(
     save_dir: str,
     device: str,
     max_epoch: int = 200,
     batch_size: int = 32,
     num_workers: int = 0,
     learning_rate: float = 1e-3,
-    model_kwargs: dict = {"in_channels": 2*2, "out_channels": 128, "linear": False},
+    model_kwargs: dict = {"in_channels": 2*2, "out_channels": 128, "linear": False, "deep_supervision": False},
     model_checkpoint: str = None,
 ):
     """
@@ -38,6 +38,7 @@ def train_unet(
     model_checkpoint (str): path to the model checkpoint to load, default is None.
     """
     set_seed()
+    deep_supervision = model_kwargs.get("deep_supervision", False)
 
     # save directory
     save_dir_log = os.path.join(save_dir, "log")
@@ -82,7 +83,7 @@ def train_unet(
     )
 
     # model
-    model = get_model("unet", model_kwargs)
+    model = get_model("unetpp", model_kwargs)
     model.to(device)
     if model_checkpoint is not None:
         load_checkpoint(
@@ -101,6 +102,8 @@ def train_unet(
         mgs_weight=0.03,
         data_range=1.0,
     )
+    if deep_supervision:
+        train_criterion = [train_criterion.copy() for _ in range(4)]
 
     # metric
     val_metric = CombinedMetric(
@@ -139,7 +142,8 @@ def train_unet(
 
         # =============== training ==============
         _train_one_epoch(
-            model = model, 
+            model = model,
+            deep_supervision = deep_supervision,
             train_loader = train_loader,
             optimizer = optimizer,
             criterion = train_criterion,
@@ -147,8 +151,13 @@ def train_unet(
         )
         logger.log_scalars({"lr": optimizer.param_groups[0]["lr"]}, epoch)
         scheduler.step()
-        logger.log_scalars(train_criterion.value_dict("train"), epoch)
-        train_criterion.reset()
+        if deep_supervision:
+            for i, criterion_i in enumerate(train_criterion):
+                logger.log_scalars(criterion_i.value_dict(f"train_out{i+1}"), epoch)
+                criterion_i.reset()
+        else:
+            logger.log_scalars(train_criterion.value_dict("train"), epoch)
+            train_criterion.reset()
 
         # =============== validation ==============
         _validate(
@@ -187,21 +196,9 @@ def train_unet(
                 path = os.path.join(save_dir_checkpoints, f"epoch_{epoch:03d}.pth"),
             )
 
-        # save the final model
-        is_last_epoch: bool = epoch == max_epoch
-        should_early_stop: bool = epochs_without_improvement >= patience
-        if is_last_epoch or should_early_stop:
-            print(f"Saving final checkpoint at epoch {epoch}")
-            save_checkpoint(
-                epoch = epoch,
-                model = model,
-                metric_value_dict = val_metric.value_dict("val"),
-                path = os.path.join(save_dir_checkpoints, "final.pth"),
-            )
-
         val_metric.reset()
 
-        if should_early_stop:
+        if epochs_without_improvement >= patience:
             print(f"Early stopping at epoch {epoch}, best metric {val_metric.best_metric_value:.6f}")
             break
 
@@ -226,9 +223,10 @@ def train_unet(
 
 def _train_one_epoch(
     model: nn.Module,
+    deep_supervision: bool,
     train_loader: DataLoader,
     optimizer: optim.Optimizer,
-    criterion: CombinedLoss,
+    criterion: CombinedLoss | List[CombinedLoss],
     device: str,
 ) -> None:
     model.train()
@@ -236,7 +234,15 @@ def _train_one_epoch(
         gravity = gravity.to(device)
         density = density.to(device)
         density_pred = model(gravity)
-        loss = criterion(density_pred, density)
+        if deep_supervision:
+            # ensure the sum of weights is 1, avoid learning rate growth
+            deep_supervision_weights = [0.05, 0.15, 0.3, 0.5]
+            loss = sum(
+                deep_supervision_weights[i] * criterion[i](density_pred[i], density)
+                for i in range(len(density_pred))
+            )
+        else:
+            loss = criterion(density_pred, density)
         optimizer.zero_grad()
         loss.backward()
         clip_grad_norm_(model.parameters(), max_norm=1.0, norm_type=2)

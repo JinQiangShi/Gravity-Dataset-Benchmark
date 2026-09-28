@@ -1,4 +1,5 @@
 from .unet import UNet
+from .unetpp import UNetPP
 from .save import save_checkpoint
 from .load import load_checkpoint
 
@@ -14,5 +15,7 @@ def get_model(
 ):
     if model_type == "unet":
         return UNet(**model_kwargs)
+    elif model_type == "unetpp":
+        return UNetPP(**model_kwargs)
     else:
         raise ValueError(f"Unknown model type: {model_type}")

@@ -31,6 +31,8 @@ class ZarrDataset(Dataset):
         data = self.data[idx] # np.float64, [channels, data_nx]
         data = torch.from_numpy(data).to(self.dtype)
         data = self.gravity_interpolate(data) # [channels, model_nx]
+        data_gradient = self.gravity_gradient(data) # [channels, model_nx]
+        data = torch.cat([data, data_gradient], dim=0) # [2*channels, model_nx]
 
         model = self.model[idx] # np.int8, [model_nz, model_nx]
         model = torch.from_numpy(model).to(self.dtype)
@@ -49,4 +51,12 @@ class ZarrDataset(Dataset):
             align_corners=True # make endpoints aligned
         ).squeeze(0)
         return interpolated_data
+
+    def gravity_gradient(self, data: torch.Tensor) -> torch.Tensor:
+        """
+        calculate gradient of gravity data
+        """
+        gradient = torch.diff(data, dim=1) # [channels, data_nx-1]
+        gradient = self.gravity_interpolate(gradient) # [channels, model_nx]
+        return gradient
 

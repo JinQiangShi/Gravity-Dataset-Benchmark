@@ -57,7 +57,7 @@ def _visualize(
         """
         Plot gravity data for a single density model.
         """
-        gx, gz = gravity
+        gx, gz = gravity[:2]
         gx_line.set_ydata(gx)
         gz_line.set_ydata(gz)
         axes[0].relim()
