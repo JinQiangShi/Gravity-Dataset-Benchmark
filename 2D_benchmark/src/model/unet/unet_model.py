@@ -1,31 +1,31 @@
 from .unet_parts import *
 
 class GravityInverseUNet2D(nn.Module):
-    def __init__(self, in_channels, out_channels, bilinear=False):
+    def __init__(self, in_channels, out_channels, linear=False):
         """
         2D gravity inverse UNet model
 
-        Params:
-        -----
+        Parameters:
+        -----------
             in_channels: input channels number, defined by gravity data channels
             out_channels: output channels number, defined by density model nz
-            bilinear: use linear upsample
+            linear: use linear upsample or not
         """
         super(GravityInverseUNet2D, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.bilinear = bilinear
+        self.linear = linear
 
         self.inc = DoubleConv(in_channels, 64)
         self.down1 = Down(64, 128)
         self.down2 = Down(128, 256)
         self.down3 = Down(256, 512)
-        factor = 2 if bilinear else 1
+        factor = 2 if linear else 1
         self.down4 = Down(512, 1024 // factor)
-        self.up1 = Up(1024, 512 // factor, bilinear)
-        self.up2 = Up(512, 256 // factor, bilinear)
-        self.up3 = Up(256, 128 // factor, bilinear)
-        self.up4 = Up(128, out_channels, bilinear)
+        self.up1 = Up(1024, 512 // factor, linear)
+        self.up2 = Up(512, 256 // factor, linear)
+        self.up3 = Up(256, 128 // factor, linear)
+        self.up4 = Up(128, out_channels, linear)
         self.outc = OutConv(1, 1)
 
     def forward(self, x):
