@@ -22,6 +22,7 @@ def train_unetpp(
     learning_rate: float = 1e-3,
     model_kwargs: dict = {"in_channels": 2*2, "out_channels": 128, "linear": False, "deep_supervision": False},
     model_checkpoint: str = None,
+    deep_supervision_weights: List[float] = [0.05, 0.15, 0.3, 0.5],
 ):
     """
     Main function for training the model.
@@ -36,6 +37,9 @@ def train_unetpp(
     learning_rate (float): learning rate for optimizer, default is 1e-3.
     model_kwargs (dict): keyword arguments for the model, default is UNet kwargs.
     model_checkpoint (str): path to the model checkpoint to load, default is None.
+    deep_supervision_weights (List[float]): weights for each deep supervision
+        output, should sum to 1 to avoid learning rate growth, default is
+        [0.05, 0.15, 0.3, 0.5].
     """
     set_seed()
     deep_supervision = model_kwargs.get("deep_supervision", False)
@@ -147,13 +151,20 @@ def train_unetpp(
             train_loader = train_loader,
             optimizer = optimizer,
             criterion = train_criterion,
-            device = device
+            device = device,
+            deep_supervision_weights = deep_supervision_weights,
         )
         logger.log_scalars({"lr": optimizer.param_groups[0]["lr"]}, epoch)
         scheduler.step()
         if deep_supervision:
-            for i, criterion_i in enumerate(train_criterion):
-                logger.log_scalars(criterion_i.value_dict(f"train_out{i+1}"), epoch)
+            logger.log_scalars(
+                [
+                    (criterion_i.value_dict("train"), deep_supervision_weights[i])
+                    for i, criterion_i in enumerate(train_criterion)
+                ],
+                epoch,
+            )
+            for criterion_i in train_criterion:
                 criterion_i.reset()
         else:
             logger.log_scalars(train_criterion.value_dict("train"), epoch)
@@ -196,9 +207,21 @@ def train_unetpp(
                 path = os.path.join(save_dir_checkpoints, f"epoch_{epoch:03d}.pth"),
             )
 
+        # save the final model
+        is_last_epoch: bool = epoch == max_epoch
+        should_early_stop: bool = epochs_without_improvement >= patience
+        if is_last_epoch or should_early_stop:
+            print(f"Saving final checkpoint at epoch {epoch}")
+            save_checkpoint(
+                epoch = epoch,
+                model = model,
+                metric_value_dict = val_metric.value_dict("val"),
+                path = os.path.join(save_dir_checkpoints, "final.pth"),
+            )
+
         val_metric.reset()
 
-        if epochs_without_improvement >= patience:
+        if should_early_stop:
             print(f"Early stopping at epoch {epoch}, best metric {val_metric.best_metric_value:.6f}")
             break
 
@@ -228,6 +251,7 @@ def _train_one_epoch(
     optimizer: optim.Optimizer,
     criterion: CombinedLoss | List[CombinedLoss],
     device: str,
+    deep_supervision_weights: List[float] = None,
 ) -> None:
     model.train()
     for gravity, density in tqdm(train_loader, desc="train"):
@@ -235,8 +259,6 @@ def _train_one_epoch(
         density = density.to(device)
         density_pred = model(gravity)
         if deep_supervision:
-            # ensure the sum of weights is 1, avoid learning rate growth
-            deep_supervision_weights = [0.05, 0.15, 0.3, 0.5]
             loss = sum(
                 deep_supervision_weights[i] * criterion[i](density_pred[i], density)
                 for i in range(len(density_pred))

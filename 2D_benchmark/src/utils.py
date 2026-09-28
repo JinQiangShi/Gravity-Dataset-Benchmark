@@ -32,8 +32,22 @@ class Logger:
         swanlab.init(log_dir=log_dir, project=project, workspace=workspace)
 
     def log_scalars(self, metrics, step):
-        """Log a dict of scalar metrics."""
+        """Log a dict of scalar metrics.
+
+        If `metrics` is a list of (value_dict, weight) pairs, the scalar values
+        are combined into a single weighted-sum dict before logging.
+        """
+        if isinstance(metrics, list):
+            metrics = self._weighted_sum(metrics)
         self._swanlab.log(metrics, step=step)
+
+    def _weighted_sum(self, metrics: list) -> dict:
+        """Weighted-sum a list of (value_dict, weight) pairs into one dict."""
+        merged = {}
+        for value_dict, weight in metrics:
+            for key, value in value_dict.items():
+                merged[key] = merged.get(key, 0.0) + weight * value
+        return merged
 
     def close(self):
         self._swanlab.finish()
