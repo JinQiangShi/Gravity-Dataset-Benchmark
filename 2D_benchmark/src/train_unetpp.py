@@ -12,6 +12,7 @@ from .dataloader import dataset_path, ZarrDataloader
 from .model import get_model, save_checkpoint, load_checkpoint
 from .loss import CombinedLoss
 from .evaluate import CombinedMetric
+from .scheduler import WarmupCosineScheduler
 
 def train_unetpp(
     save_dir: str,
@@ -23,6 +24,8 @@ def train_unetpp(
     model_kwargs: dict = {"in_channels": 2*2, "out_channels": 128, "linear": False, "deep_supervision": False},
     model_checkpoint: str = None,
     deep_supervision_weights: List[float] = [0.05, 0.15, 0.3, 0.5],
+    checkpoint_save_interval: int = 20,
+    earlystop_patience: int = 20,
 ):
     """
     Main function for training the model.
@@ -40,6 +43,8 @@ def train_unetpp(
     deep_supervision_weights (List[float]): weights for each deep supervision
         output, should sum to 1 to avoid learning rate growth, default is
         [0.05, 0.15, 0.3, 0.5].
+    checkpoint_save_interval (int): interval (in epochs) to save periodic checkpoints, default is 20.
+    earlystop_patience (int): number of epochs without improvement before early stopping, default is 20.
     """
     set_seed()
     deep_supervision = model_kwargs.get("deep_supervision", False)
@@ -123,23 +128,9 @@ def train_unetpp(
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
     # scheduler
-    warmup_epochs = 20
-    scheduler = optim.lr_scheduler.SequentialLR(
-        optimizer,
-        schedulers=[
-            optim.lr_scheduler.LinearLR(
-                optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_epochs,
-            ),
-            optim.lr_scheduler.CosineAnnealingWarmRestarts(
-                optimizer, T_0=20, T_mult=2, eta_min=1e-6,
-            ),
-        ],
-        milestones=[warmup_epochs],
-    )
+    scheduler = WarmupCosineScheduler(optimizer, warmup_epochs=20)
 
     # loop
-    save_interval = 20
-    patience = 20
     epochs_without_improvement = 0
     for epoch in range(1, max_epoch+1):
         print(f"Epoch {epoch}")
@@ -198,7 +189,7 @@ def train_unetpp(
             epochs_without_improvement += 1
 
         # periodic checkpoint
-        if epoch % save_interval == 0:
+        if epoch % checkpoint_save_interval == 0:
             print(f"Saving checkpoint at epoch {epoch}")
             save_checkpoint(
                 epoch = epoch,
@@ -209,7 +200,7 @@ def train_unetpp(
 
         # save the final model
         is_last_epoch: bool = epoch == max_epoch
-        should_early_stop: bool = epochs_without_improvement >= patience
+        should_early_stop: bool = epochs_without_improvement >= earlystop_patience
         if is_last_epoch or should_early_stop:
             print(f"Saving final checkpoint at epoch {epoch}")
             save_checkpoint(
