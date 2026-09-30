@@ -256,7 +256,7 @@ def _testify(
     device: str,
     logger: Logger,
     max_vis: int = 100,
-) -> dict:
+) -> None:
     model.eval()
     with torch.no_grad():
         for zarr_dataloader in zarr_dataloaders:
