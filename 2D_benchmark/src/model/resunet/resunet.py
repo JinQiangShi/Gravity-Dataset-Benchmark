@@ -25,6 +25,39 @@ class ResidualConv(nn.Module):
         return self.conv_block(x) + self.conv_skip(x)
 
 
+class Upsample(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel, stride):
+        super(Upsample, self).__init__()
+
+        self.upsample = nn.ConvTranspose2d(
+            in_channels, out_channels, kernel_size=kernel, stride=stride
+        )
+
+    def forward(self, x):
+        return self.upsample(x)
+
+
+class OutConv(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(OutConv, self).__init__()
+        self.conv1d = nn.Conv1d(in_channels, out_channels, kernel_size=1, bias=True)
+        self.bn1d = nn.BatchNorm1d(out_channels, eps=1e-5, affine=True, momentum=0.1)
+        self.leakyrelu = nn.LeakyReLU(negative_slope=1e-2, inplace=True)
+        self.conv2d = nn.Conv2d(1, 1, kernel_size=1, bias=True)
+        self.softplus = nn.Softplus()
+        # softplus activation motivated by
+        # Deep Learning-Based 3D Gravity Inversion: A Comparative Analysis of CNN Architectures for Density Estimation
+
+    def forward(self, x):
+        x = self.conv1d(x)
+        x = self.bn1d(x)
+        x = self.leakyrelu(x)
+        x = x.unsqueeze(1) # (batch, nz, nx) -> (batch, 1, nz, nx)
+        x = self.conv2d(x)
+        x = self.softplus(x)
+        return x
+
+
 class ResUnet(nn.Module):
     def __init__(self, in_channels, out_channels, linear=False):
         super(ResUnet, self).__init__()
@@ -37,7 +70,7 @@ class ResUnet(nn.Module):
             nn.Conv1d(feature_map_nums[0], feature_map_nums[0], kernel_size=3, padding=1),
         )
         self.input_skip = nn.Sequential(
-            nn.Conv2d(in_channels, feature_map_nums[0], kernel_size=3, padding=1)
+            nn.Conv1d(in_channels, feature_map_nums[0], kernel_size=3, padding=1)
         )
 
         self.residual_conv_1 = ResidualConv(feature_map_nums[0], feature_map_nums[1], 2, 1)
@@ -54,10 +87,7 @@ class ResUnet(nn.Module):
         self.upsample_3 = Upsample(feature_map_nums[1], feature_map_nums[1], 2, 2)
         self.up_residual_conv3 = ResidualConv(feature_map_nums[1] + feature_map_nums[0], feature_map_nums[0], 1, 1)
 
-        self.output_layer = nn.Sequential(
-            nn.Conv2d(feature_map_nums[0], 1, 1, 1),
-            nn.Sigmoid(),
-        )
+        self.output_layer = OutConv(feature_map_nums[0], out_channels)
 
     def forward(self, x):
         # Encode
