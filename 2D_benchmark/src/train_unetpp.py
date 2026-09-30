@@ -60,8 +60,9 @@ def train_unetpp(
     # logger
     logger = Logger(
         log_dir=save_dir_log,
-        project="Gravity_Dataset_Benchmark", 
-        workspace="sjq"
+        project="Gravity-Dataset", 
+        workspace="sjq",
+        name=os.path.basename(save_dir),
     )
 
     # device
