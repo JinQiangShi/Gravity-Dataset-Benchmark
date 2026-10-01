@@ -18,8 +18,8 @@ class ZarrDataset(Dataset):
             dtype (torch.dtype): output tensor data type
         """
         self.root = zarr.open(zarr_path, mode="r")
-        self.model = self.root["density"] # density model, [batch, model_nz, model_nx]
-        self.data = self.root["gravity1"] # gravity data, [batch, channels, data_nx]
+        self.model = self.root["density"] # density model, [batch, model_nz, model_ny, model_nx]
+        self.data = self.root["gravity1"] # gravity data, [batch, channels, data_ny, data_nx]
         self.dtype = dtype
         self.length = self.model.shape[0]
         self.model_nz, self.model_ny, self.model_nx = self.model.shape[-3:]
@@ -30,13 +30,13 @@ class ZarrDataset(Dataset):
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         data = self.data[idx] # np.float64, [channels, data_ny, data_nx]
         data = torch.from_numpy(data).to(self.dtype)
-        data = self.gravity_interpolate(data) # [channels, model_nx]
-        data_gradient = self.gravity_gradient(data) # [channels, model_nx]
-        data = torch.cat([data, data_gradient], dim=0) # [2*channels, model_nx]
+        data = self.gravity_interpolate(data) # [channels, model_ny, model_nx]
+        data_gradient_y, data_gradient_x = self.gravity_gradient(data) # [channels, model_ny, model_nx]
+        data = torch.cat([data, data_gradient_y, data_gradient_x], dim=0) # [3*channels, model_ny, model_nx]
 
-        model = self.model[idx] # np.int8, [model_nz, model_nx]
+        model = self.model[idx] # np.int8, [model_nz, model_ny, model_nx]
         model = torch.from_numpy(model).to(self.dtype)
-        model = model.unsqueeze(0) # [1, model_nz, model_nx]
+        model = model.unsqueeze(0) # [1, model_nz, model_ny, model_nx]
 
         return data, model
 
@@ -45,9 +45,9 @@ class ZarrDataset(Dataset):
         interpolate gravity data to match density model
         """
         interpolated_data = F.interpolate(
-            data.unsqueeze(0), # [1, channels, data_nx]
-            size=self.model_nx,
-            mode="linear", 
+            data.unsqueeze(0), # [1, channels, data_ny, data_nx]
+            size=(self.model_ny, self.model_nx),
+            mode="bilinear", 
             align_corners=True # make endpoints aligned
         ).squeeze(0)
         return interpolated_data
@@ -56,7 +56,10 @@ class ZarrDataset(Dataset):
         """
         calculate gradient of gravity data
         """
-        gradient = torch.diff(data, dim=1) # [channels, data_nx-1]
-        gradient = self.gravity_interpolate(gradient) # [channels, model_nx]
-        return gradient
+        gradient_y = torch.diff(data, dim=1) # [channels, data_ny-1, data_nx]
+        gradient_y = self.gravity_interpolate(gradient_y) # [channels, model_ny, model_nx]
+        
+        gradient_x = torch.diff(data, dim=2) # [channels, data_ny, data_nx-1]
+        gradient_x = self.gravity_interpolate(gradient_x) # [channels, model_ny, model_nx]
+        return gradient_y, gradient_x
 
