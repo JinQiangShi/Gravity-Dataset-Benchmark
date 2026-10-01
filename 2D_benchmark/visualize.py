@@ -8,15 +8,18 @@ if __name__ == "__main__":
         npz_dir=os.path.join(root, "unetpp_deepsupervision", "test_result"),
         plot_dir=os.path.join(root, "unetpp_deepsupervision", "plot")
     )
-    visualize(
-        npz_dir=os.path.join(root, "unetpp_baseline", "test_result"),
-        plot_dir=os.path.join(root, "unetpp_baseline", "plot")
-    )
-    visualize(
-        npz_dir=os.path.join(root, "unet_gradient", "test_result"),
-        plot_dir=os.path.join(root, "unet_gradient", "plot")
-    )
-    visualize(
-        npz_dir=os.path.join(root, "unet_baseline", "test_result"),
-        plot_dir=os.path.join(root, "unet_baseline", "plot")
-    )
+
+    # visualize(
+    #     npz_dir=os.path.join(root, "unetpp_baseline", "test_result"),
+    #     plot_dir=os.path.join(root, "unetpp_baseline", "plot")
+    # )
+
+    # visualize(
+    #     npz_dir=os.path.join(root, "unet_gradient", "test_result"),
+    #     plot_dir=os.path.join(root, "unet_gradient", "plot")
+    # )
+    
+    # visualize(
+    #     npz_dir=os.path.join(root, "unet_baseline", "test_result"),
+    #     plot_dir=os.path.join(root, "unet_baseline", "plot")
+    # )
