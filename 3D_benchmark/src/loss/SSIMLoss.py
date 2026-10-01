@@ -15,34 +15,33 @@ class SSIMLoss(nn.Module):
 
     @staticmethod
     def _gaussian_window(window_size, sigma):
-        # 1D Gaussian, then outer product to build a 2D window
         coords = torch.arange(window_size, dtype=torch.float32) - window_size // 2
         g = torch.exp(-(coords ** 2) / (2 * sigma ** 2))
         g = g / g.sum()
-        window = g[:, None] * g[None, :]
-        return window.view(1, 1, window_size, window_size)
+        window = g[:, None, None] * g[None, :, None] * g[None, None, :]
+        return window.view(1, 1, window_size, window_size, window_size)
 
     def forward(self, pred, target):
-        # pred shape (batch, channels, nz, nx)
-        # target shape (batch, channels, nz, nx)
+        # pred shape (batch, channels, nz, ny, nx)
+        # target shape (batch, channels, nz, ny, nx)
         data_range = self.data_range
         if data_range is None:
             data_range = target.max() - target.min()
 
         channels = pred.shape[1]
-        window = self.window.to(device=pred.device, dtype=pred.dtype).expand(channels, 1, -1, -1).contiguous()
+        window = self.window.to(device=pred.device, dtype=pred.dtype).expand(channels, 1, -1, -1, -1).contiguous()
         pad = self.window_size // 2
 
-        mu_pred = F.conv2d(pred, window, padding=pad, groups=channels)
-        mu_target = F.conv2d(target, window, padding=pad, groups=channels)
+        mu_pred = F.conv3d(pred, window, padding=pad, groups=channels)
+        mu_target = F.conv3d(target, window, padding=pad, groups=channels)
 
         mu_pred_sq = mu_pred ** 2
         mu_target_sq = mu_target ** 2
         mu_cross = mu_pred * mu_target
 
-        sigma_pred_sq = F.conv2d(pred ** 2, window, padding=pad, groups=channels) - mu_pred_sq
-        sigma_target_sq = F.conv2d(target ** 2, window, padding=pad, groups=channels) - mu_target_sq
-        sigma_cross = F.conv2d(pred * target, window, padding=pad, groups=channels) - mu_cross
+        sigma_pred_sq = F.conv3d(pred ** 2, window, padding=pad, groups=channels) - mu_pred_sq
+        sigma_target_sq = F.conv3d(target ** 2, window, padding=pad, groups=channels) - mu_target_sq
+        sigma_cross = F.conv3d(pred * target, window, padding=pad, groups=channels) - mu_cross
 
         c1 = (self.k1 * data_range) ** 2
         c2 = (self.k2 * data_range) ** 2

@@ -8,7 +8,7 @@ class MinimumSupportLoss(nn.Module):
         self.beta = beta
 
     def forward(self, pred):
-        # pred shape (batch, 1, nz, nx)
+        # pred shape (batch, 1, nz, ny, nx)
         # Minimum support functional: sum(pred^2 / (pred^2 + beta^2))
         # Penalizes the volume of the anomalous region, producing compact bodies.
         msf = torch.sum(pred ** 2 / (pred ** 2 + self.beta ** 2))
