@@ -11,7 +11,7 @@ class CombinedMetric(nn.Module):
         mae_weight: float = 0.4,
         psnr_weight: float = 0.4,
         ssim_weight: float = 0.2,
-        psnr_max: float = 25.0,
+        psnr_max: float = 20.0,
         data_range: float = 1.0,
     ):
         super(CombinedMetric, self).__init__()
