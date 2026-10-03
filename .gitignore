@@ -1,4 +1,5 @@
 .venv
 __pycache__/
 2D_benchmark/product
+3D_benchmark/product
 other/

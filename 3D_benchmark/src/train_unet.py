@@ -17,14 +17,14 @@ from .scheduler import WarmupCosineScheduler
 def train_unet(
     save_dir: str,
     device: str,
-    max_epoch: int = 200,
-    batch_size: int = 8,
+    max_epoch: int = 100,
+    batch_size: int = 4,
     num_workers: int = 0,
     learning_rate: float = 1e-3,
     model_kwargs: dict = {"in_channels": 3*3, "out_channels": 128, "linear": False},
     model_checkpoint: str = None,
-    checkpoint_save_interval: int = 20,
-    earlystop_patience: int = 20,
+    checkpoint_save_interval: int = 10,
+    earlystop_patience: int = 10,
 ):
     """
     Main function for training the model.
@@ -33,14 +33,14 @@ def train_unet(
     ----------
     save_dir (str): directory to save the model checkpoints and test results.
     device (str): device to use for training.
-    max_epoch (int): maximum number of epochs to train, default is 200.
-    batch_size (int): batch size for dataloader, default is 32.
+    max_epoch (int): maximum number of epochs to train, default is 100.
+    batch_size (int): batch size for dataloader, default is 4.
     num_workers (int): number of workers for dataloader, default is 0.
     learning_rate (float): learning rate for optimizer, default is 1e-3.
     model_kwargs (dict): keyword arguments for the model, default is UNet kwargs.
     model_checkpoint (str): path to the model checkpoint to load, default is None.
-    checkpoint_save_interval (int): interval (in epochs) to save periodic checkpoints, default is 20.
-    earlystop_patience (int): number of epochs without improvement before early stopping, default is 20.
+    checkpoint_save_interval (int): interval (in epochs) to save periodic checkpoints, default is 10.
+    earlystop_patience (int): number of epochs without improvement before early stopping, default is 10.
     """
     set_seed()
 
@@ -113,7 +113,7 @@ def train_unet(
         mae_weight=1.0,
         psnr_weight=0.5,
         ssim_weight=0.3,
-        psnr_max=20.0,
+        psnr_max=25.0,
         data_range=1.0,
     )
     test_metric = val_metric.copy()
@@ -122,7 +122,7 @@ def train_unet(
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
     # scheduler
-    scheduler = WarmupCosineScheduler(optimizer, warmup_epochs=20)
+    scheduler = WarmupCosineScheduler(optimizer, warmup_epochs=10)
 
     # loop
     epochs_without_improvement = 0
