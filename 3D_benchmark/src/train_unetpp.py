@@ -17,15 +17,15 @@ from .scheduler import WarmupCosineScheduler
 def train_unetpp(
     save_dir: str,
     device: str,
-    max_epoch: int = 200,
-    batch_size: int = 32,
+    max_epoch: int = 100,
+    batch_size: int = 4,
     num_workers: int = 0,
     learning_rate: float = 1e-3,
-    model_kwargs: dict = {"in_channels": 2*2, "out_channels": 128, "linear": False, "deep_supervision": False},
+    model_kwargs: dict = {"in_channels": 3*3, "out_channels": 128, "linear": False, "deep_supervision": False},
     model_checkpoint: str = None,
     deep_supervision_weights: List[float] = [0.05, 0.15, 0.3, 0.5],
-    checkpoint_save_interval: int = 20,
-    earlystop_patience: int = 20,
+    checkpoint_save_interval: int = 10,
+    earlystop_patience: int = 10,
 ):
     """
     Main function for training the model.
@@ -34,8 +34,8 @@ def train_unetpp(
     ----------
     save_dir (str): directory to save the model checkpoints and test results.
     device (str): device to use for training.
-    max_epoch (int): maximum number of epochs to train, default is 200.
-    batch_size (int): batch size for dataloader, default is 32.
+    max_epoch (int): maximum number of epochs to train, default is 100.
+    batch_size (int): batch size for dataloader, default is 4.
     num_workers (int): number of workers for dataloader, default is 0.
     learning_rate (float): learning rate for optimizer, default is 1e-3.
     model_kwargs (dict): keyword arguments for the model, default is UNet kwargs.
@@ -43,8 +43,8 @@ def train_unetpp(
     deep_supervision_weights (List[float]): weights for each deep supervision
         output, should sum to 1 to avoid learning rate growth, default is
         [0.05, 0.15, 0.3, 0.5].
-    checkpoint_save_interval (int): interval (in epochs) to save periodic checkpoints, default is 20.
-    earlystop_patience (int): number of epochs without improvement before early stopping, default is 20.
+    checkpoint_save_interval (int): interval (in epochs) to save periodic checkpoints, default is 10.
+    earlystop_patience (int): number of epochs without improvement before early stopping, default is 10.
     """
     set_seed()
     deep_supervision = model_kwargs.get("deep_supervision", False)
@@ -129,7 +129,7 @@ def train_unetpp(
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
     # scheduler
-    scheduler = WarmupCosineScheduler(optimizer, warmup_epochs=20)
+    scheduler = WarmupCosineScheduler(optimizer, warmup_epochs=10)
 
     # loop
     epochs_without_improvement = 0
