@@ -120,7 +120,7 @@ def train_unetpp(
         mae_weight=1.0,
         psnr_weight=0.5,
         ssim_weight=0.3,
-        psnr_max=20.0,
+        psnr_max=25.0,
         data_range=1.0,
     )
     test_metric = val_metric.copy()
