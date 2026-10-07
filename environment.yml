@@ -1,0 +1,15 @@
+name: benchmark
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - torch==2.14.0+cu126
+  - torchvision==0.29.0+cu126
+  - torchaudio==2.11.0+cu126
+  - numpy
+  - zarr
+  - tqdm
+  - matplotlib
+  - scikit-image
+  - swanlab
