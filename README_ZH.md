@@ -85,10 +85,13 @@ benchmark/
 
 ### 评估指标
 
-[`CombinedMetric`](2D_benchmark/src/evaluate/CombinedMetric.py) 将 MAE、PSNR、SSIM 归一化后加权组合（权重 1.0 / 0.5 / 0.3）作为验证集上的模型选择与早停依据：
-$$
-\text{metric} = w_{\text{mae}} \cdot \text{MAE} + w_{\text{psnr}} \cdot \left(1 - \frac{\text{PSNR}}{\text{psnr\_max}}\right) + w_{\text{ssim}} \cdot (1 - \text{SSIM})
-$$
+[`CombinedMetric`](2D_benchmark/src/evaluate/CombinedMetric.py) 将 MAE、PSNR、SSIM 归一化后加权组合，作为验证集上的模型选择与早停依据。各分项及默认权重：
+
+| 指标项 | 权重 | 说明 |
+| :--- | :--- | :--- |
+| MAE | 1.0 | 平均绝对误差 |
+| PSNR | 0.5 | 峰值信噪比，按 `psnr_max` 归一化 |
+| SSIM | 0.3 | 结构相似性 |
 
 ### 训练策略
 

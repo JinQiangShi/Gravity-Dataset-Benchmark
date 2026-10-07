@@ -85,11 +85,13 @@ Components and default weights of [`CombinedLoss`](2D_benchmark/src/loss/Combine
 
 ### Evaluation Metric
 
-[`CombinedMetric`](2D_benchmark/src/evaluate/CombinedMetric.py) normalizes and weights MAE, PSNR, and SSIM (weights 1.0 / 0.5 / 0.3) as the model selection and early-stopping criterion on the validation set:
+[`CombinedMetric`](2D_benchmark/src/evaluate/CombinedMetric.py) normalizes and weights MAE, PSNR, and SSIM as the model selection and early-stopping criterion on the validation set. Components and default weights:
 
-$$
-\text{metric} = w_{\text{mae}} \cdot \text{MAE} + w_{\text{psnr}} \cdot \left(1 - \frac{\text{PSNR}}{\text{psnr\_max}}\right) + w_{\text{ssim}} \cdot (1 - \text{SSIM})
-$$
+| Metric Term | Weight | Description |
+| :--- | :--- | :--- |
+| MAE | 1.0 | Mean absolute error |
+| PSNR | 0.5 | Peak signal-to-noise ratio, normalized by `psnr_max` |
+| SSIM | 0.3 | Structural similarity |
 
 ### Training Strategy
 
