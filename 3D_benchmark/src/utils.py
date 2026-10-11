@@ -26,11 +26,10 @@ class Logger:
         self, 
         log_dir: str,
         project: str, 
-        workspace: str, 
         name: str,
     ):
         self._swanlab = swanlab
-        swanlab.init(log_dir=log_dir, project=project, workspace=workspace, name=name, group="3D Benchmark")
+        swanlab.init(log_dir=log_dir, project=project, name=name, group="3D Benchmark")
 
     def log_scalars(self, metrics, step):
         """Log a dict of scalar metrics.

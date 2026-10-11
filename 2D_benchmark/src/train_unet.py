@@ -56,7 +56,6 @@ def train_unet(
     logger = Logger(
         log_dir=save_dir_log,
         project="Gravity-Dataset", 
-        workspace="benchmark",
         name=os.path.basename(save_dir),
     )
 
