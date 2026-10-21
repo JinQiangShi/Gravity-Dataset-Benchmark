@@ -4,6 +4,9 @@ from src import visualize
 if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     root = r"E:\Research\benchmark\2D_benchmark\product"
+
+    # ========== Visualize on geo_model ==========
+
     visualize(
         npz_dir=os.path.join(root, "unetpp_deepsupervision", "test_result"),
         plot_dir=os.path.join(root, "unetpp_deepsupervision", "plot")
