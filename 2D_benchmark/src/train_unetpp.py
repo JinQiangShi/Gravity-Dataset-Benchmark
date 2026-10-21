@@ -25,7 +25,7 @@ def train_unetpp(
     learning_rate: float = 1e-3,
     model_kwargs: dict = {"in_channels": 2*2, "out_channels": 128, "linear": False, "deep_supervision": False},
     model_checkpoint: str = None,
-    loss_kwargs: dict = {"huber_weight": 1.0, "depth_weight": 1.0, "ssim_weight": 0.03, "tv_weight": 0.03, "ms_weight": 0.03, "mgs_weight": 0.03, "data_range": 1.0},
+    loss_kwargs: dict = None,
     metric_kwargs: dict = {"mae_weight": 1.0, "psnr_weight": 0.5, "ssim_weight": 0.3, "psnr_max": 20.0, "data_range": 1.0},
     deep_supervision_weights: List[float] = [0.05, 0.15, 0.3, 0.5],
     checkpoint_save_interval: int = 20,
@@ -47,9 +47,7 @@ def train_unetpp(
     model_kwargs (dict): keyword arguments for the model, default is UNet kwargs.
     model_checkpoint (str): path to the model checkpoint to load, default is None.
     loss_kwargs (dict): keyword arguments for `CombinedLoss`, default is
-        {"huber_weight": 1.0, "depth_weight": 1.0, "ssim_weight": 0.03,
-        "tv_weight": 0.03, "ms_weight": 0.03, "mgs_weight": 0.03,
-        "data_range": 1.0}.
+        None, which uses the default arguments of `CombinedLoss`.
     metric_kwargs (dict): keyword arguments for `CombinedMetric`, default is
         {"mae_weight": 1.0, "psnr_weight": 0.5, "ssim_weight": 0.3,
         "psnr_max": 20.0, "data_range": 1.0}.
@@ -116,7 +114,7 @@ def train_unetpp(
         )
 
     # loss
-    train_criterion = CombinedLoss(**loss_kwargs)
+    train_criterion = CombinedLoss(**(loss_kwargs or {}))
     if deep_supervision:
         train_criterion = [train_criterion.copy() for _ in range(4)]
 

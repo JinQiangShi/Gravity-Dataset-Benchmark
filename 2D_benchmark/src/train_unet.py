@@ -25,7 +25,7 @@ def train_unet(
     learning_rate: float = 1e-3,
     model_kwargs: dict = {"in_channels": 2*2, "out_channels": 128, "linear": False},
     model_checkpoint: str = None,
-    loss_kwargs: dict = {"huber_weight": 1.0, "depth_weight": 1.0, "ssim_weight": 0.03, "tv_weight": 0.03, "ms_weight": 0.03, "mgs_weight": 0.03, "data_range": 1.0},
+    loss_kwargs: dict = None,
     metric_kwargs: dict = {"mae_weight": 1.0, "psnr_weight": 0.5, "ssim_weight": 0.3, "psnr_max": 20.0, "data_range": 1.0},
     checkpoint_save_interval: int = 20,
     earlystop_patience: int = 20,
@@ -46,9 +46,7 @@ def train_unet(
     model_kwargs (dict): keyword arguments for the model, default is UNet kwargs.
     model_checkpoint (str): path to the model checkpoint to load, default is None.
     loss_kwargs (dict): keyword arguments for `CombinedLoss`, default is
-        {"huber_weight": 1.0, "depth_weight": 1.0, "ssim_weight": 0.03,
-        "tv_weight": 0.03, "ms_weight": 0.03, "mgs_weight": 0.03,
-        "data_range": 1.0}.
+        None, which uses the default arguments of `CombinedLoss`.
     metric_kwargs (dict): keyword arguments for `CombinedMetric`, default is
         {"mae_weight": 1.0, "psnr_weight": 0.5, "ssim_weight": 0.3,
         "psnr_max": 20.0, "data_range": 1.0}.
@@ -111,7 +109,7 @@ def train_unet(
         )
 
     # loss
-    train_criterion = CombinedLoss(**loss_kwargs)
+    train_criterion = CombinedLoss(**(loss_kwargs or {}))
 
     # metric
     val_metric = CombinedMetric(**metric_kwargs)

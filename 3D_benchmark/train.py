@@ -10,11 +10,8 @@ if __name__ == "__main__":
         max_epoch = 100,
         batch_size = 4,
         learning_rate = 1e-3,
-        model_kwargs = {
-            "in_channels": 3*3,
-            "out_channels": 128,
-            "deep_supervision": True,
-        },
+        loss_kwargs = {"huber_weight": 1.0, "depth_weight": 1.0, "ssim_weight": 0.03, "tv_weight": 0.03, "ms_weight": 0.03, "mgs_weight": 0.03, "data_range": 1.0},
+        model_kwargs = {"in_channels": 3*3, "out_channels": 128, "deep_supervision": True},
     )
 
     # train_unet(
@@ -23,8 +20,6 @@ if __name__ == "__main__":
     #     max_epoch = 100,
     #     batch_size = 4,
     #     learning_rate = 1e-3,
-    #     model_kwargs = {
-    #         "in_channels": 3*3,
-    #         "out_channels": 128,
-    #     },
+    #     loss_kwargs = {"huber_weight": 1.0, "depth_weight": 1.0, "ssim_weight": 0.03, "tv_weight": 0.03, "ms_weight": 0.03, "mgs_weight": 0.03, "data_range": 1.0},
+    #     model_kwargs = {"in_channels": 3*3, "out_channels": 128},
     # )
