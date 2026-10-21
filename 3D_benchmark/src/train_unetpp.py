@@ -26,7 +26,7 @@ def train_unetpp(
     model_kwargs: dict = {"in_channels": 3*3, "out_channels": 128, "linear": False, "deep_supervision": False},
     model_checkpoint: str = None,
     loss_kwargs: dict = None,
-    metric_kwargs: dict = {"mae_weight": 1.0, "psnr_weight": 0.5, "ssim_weight": 0.3, "psnr_max": 25.0, "data_range": 1.0},
+    metric_kwargs: dict = None,
     deep_supervision_weights: List[float] = [0.05, 0.15, 0.3, 0.5],
     checkpoint_save_interval: int = 10,
     earlystop_patience: int = 10,
@@ -49,8 +49,7 @@ def train_unetpp(
     loss_kwargs (dict): keyword arguments for `CombinedLoss`, default is
         None, which uses the default arguments of `CombinedLoss`.
     metric_kwargs (dict): keyword arguments for `CombinedMetric`, default is
-        {"mae_weight": 1.0, "psnr_weight": 0.5, "ssim_weight": 0.3,
-        "psnr_max": 25.0, "data_range": 1.0}.
+        None, which uses the default arguments of `CombinedMetric`.
     deep_supervision_weights (List[float]): weights for each deep supervision
         output, should sum to 1 to avoid learning rate growth, default is
         [0.05, 0.15, 0.3, 0.5].
@@ -119,7 +118,7 @@ def train_unetpp(
         train_criterion = [train_criterion.copy() for _ in range(4)]
 
     # metric
-    val_metric = CombinedMetric(**metric_kwargs)
+    val_metric = CombinedMetric(**(metric_kwargs or {}))
     test_metric = val_metric.copy()
 
     # optimizer

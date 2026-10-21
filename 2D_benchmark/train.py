@@ -26,6 +26,7 @@ if __name__ == "__main__":
     #     learning_rate = 1e-3,
     #     add_gradient = True,
     #     loss_kwargs = {"huber_weight": 1.0, "depth_weight": 1.0, "ssim_weight": 0.03, "tv_weight": 0.03, "ms_weight": 0.03, "mgs_weight": 0.03, "data_range": 1.0},
+    #     metric_kwargs = {"mae_weight": 1.0, "psnr_weight": 0.5, "ssim_weight": 0.3, "psnr_max": 20.0, "data_range": 1.0},
     #     model_kwargs = {"in_channels": 2*2, "out_channels": 128, "deep_supervision": True},
     # )
 
@@ -37,6 +38,7 @@ if __name__ == "__main__":
     #     learning_rate = 1e-3,
     #     add_gradient = True,
     #     loss_kwargs = {"huber_weight": 1.0, "depth_weight": 1.0, "ssim_weight": 0.03, "tv_weight": 0.03, "ms_weight": 0.03, "mgs_weight": 0.03, "data_range": 1.0},
+    #     metric_kwargs = {"mae_weight": 1.0, "psnr_weight": 0.5, "ssim_weight": 0.3, "psnr_max": 20.0, "data_range": 1.0},
     #     model_kwargs = {"in_channels": 2*2, "out_channels": 128},
     # )
 
@@ -48,6 +50,7 @@ if __name__ == "__main__":
     #     learning_rate = 1e-3,
     #     add_gradient = True,
     #     loss_kwargs = {"huber_weight": 1.0, "depth_weight": 1.0, "ssim_weight": 0.03, "tv_weight": 0.03, "ms_weight": 0.03, "mgs_weight": 0.03, "data_range": 1.0},
+    #     metric_kwargs = {"mae_weight": 1.0, "psnr_weight": 0.5, "ssim_weight": 0.3, "psnr_max": 20.0, "data_range": 1.0},
     #     model_kwargs = {"in_channels": 2*2, "out_channels": 128},
     # )
 
@@ -59,5 +62,6 @@ if __name__ == "__main__":
     #     learning_rate = 1e-3,
     #     add_gradient = False,
     #     loss_kwargs = {"huber_weight": 1.0, "depth_weight": 1.0, "ssim_weight": 0.03, "tv_weight": 0.03, "ms_weight": 0.03, "mgs_weight": 0.03, "data_range": 1.0},
+    #     metric_kwargs = {"mae_weight": 1.0, "psnr_weight": 0.5, "ssim_weight": 0.3, "psnr_max": 20.0, "data_range": 1.0},
     #     model_kwargs = {"in_channels": 2, "out_channels": 128},
     # )
