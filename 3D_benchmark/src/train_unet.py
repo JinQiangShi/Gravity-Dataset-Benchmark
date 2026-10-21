@@ -5,7 +5,7 @@ from tqdm import tqdm
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from torch.nn.utils import clip_grad_norm_
-from typing import List
+from typing import List, Literal
 
 from .utils import set_seed, Logger
 from .dataloader import dataset_path, ZarrDataloader
@@ -17,6 +17,7 @@ from .scheduler import WarmupCosineScheduler
 def train_unet(
     save_dir: str,
     device: str,
+    dataset_type: Literal["geo_model", "fold_layer"] = "geo_model",
     max_epoch: int = 100,
     batch_size: int = 4,
     num_workers: int = 0,
@@ -33,6 +34,7 @@ def train_unet(
     ----------
     save_dir (str): directory to save the model checkpoints and test results.
     device (str): device to use for training.
+    dataset_type (Literal["geo_model", "fold_layer"]): type of the dataset to use, must be a key of DATASET_PATH, default is "geo_model".
     max_epoch (int): maximum number of epochs to train, default is 100.
     batch_size (int): batch size for dataloader, default is 4.
     num_workers (int): number of workers for dataloader, default is 0.
@@ -69,7 +71,7 @@ def train_unet(
             zarr_path = zarr_path,
             batch_size = batch_size,
             num_workers = num_workers,
-        ) for _, zarr_path in dataset_path("geo_model").items()
+        ) for _, zarr_path in dataset_path(dataset_type).items()
     ]
 
     train_loader = ZarrDataloader.merge(
