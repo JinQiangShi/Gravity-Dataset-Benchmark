@@ -10,17 +10,20 @@ class ZarrDataset(Dataset):
         self,
         zarr_path: str,
         dtype: torch.dtype = torch.float32,
+        add_gradient: bool = True,
     ):
         """
         Parameters:
         -----------
             zarr_path (str): zarr file path
             dtype (torch.dtype): output tensor data type
+            add_gradient (bool): whether to append the gravity gradient as extra input channels
         """
         self.root = zarr.open(zarr_path, mode="r")
         self.model = self.root["density"] # density model, [batch, model_nz, model_ny, model_nx]
         self.data = self.root["gravity1"] # gravity data, [batch, channels, data_ny, data_nx]
         self.dtype = dtype
+        self.add_gradient = add_gradient
         self.length = self.model.shape[0]
         self.model_nz, self.model_ny, self.model_nx = self.model.shape[-3:]
 
@@ -31,8 +34,9 @@ class ZarrDataset(Dataset):
         data = self.data[idx] # np.float64, [channels, data_ny, data_nx]
         data = torch.from_numpy(data).to(self.dtype)
         data = self.gravity_interpolate(data) # [channels, model_ny, model_nx]
-        data_gradient_y, data_gradient_x = self.gravity_gradient(data) # [channels, model_ny, model_nx]
-        data = torch.cat([data, data_gradient_y, data_gradient_x], dim=0) # [3*channels, model_ny, model_nx]
+        if self.add_gradient:
+            data_gradient_y, data_gradient_x = self.gravity_gradient(data) # [channels, model_ny, model_nx]
+            data = torch.cat([data, data_gradient_y, data_gradient_x], dim=0) # [3*channels, model_ny, model_nx]
 
         model = self.model[idx] # np.int8, [model_nz, model_ny, model_nx]
         model = torch.from_numpy(model).to(self.dtype)

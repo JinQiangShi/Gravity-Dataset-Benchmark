@@ -13,8 +13,9 @@ class ZarrDataloader:
         batch_size: int,
         num_workers: int = 0,
         dtype: torch.dtype = torch.float32,
+        add_gradient: bool = True,
     ):
-        self.dataset = ZarrDataset(zarr_path, dtype=dtype)
+        self.dataset = ZarrDataset(zarr_path, dtype=dtype, add_gradient=add_gradient)
         self.num_workers = num_workers
         self.batch_size = batch_size
         self.zarr_name = os.path.splitext(os.path.basename(zarr_path))[0]

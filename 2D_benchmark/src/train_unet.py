@@ -21,6 +21,7 @@ def train_unet(
     max_epoch: int = 200,
     batch_size: int = 32,
     num_workers: int = 0,
+    add_gradient: bool = True,
     learning_rate: float = 1e-3,
     model_kwargs: dict = {"in_channels": 2*2, "out_channels": 128, "linear": False},
     model_checkpoint: str = None,
@@ -40,6 +41,7 @@ def train_unet(
     max_epoch (int): maximum number of epochs to train, default is 200.
     batch_size (int): batch size for dataloader, default is 32.
     num_workers (int): number of workers for dataloader, default is 0.
+    add_gradient (bool): whether to append the gravity gradient as extra input channels, default is True.
     learning_rate (float): learning rate for optimizer, default is 1e-3.
     model_kwargs (dict): keyword arguments for the model, default is UNet kwargs.
     model_checkpoint (str): path to the model checkpoint to load, default is None.
@@ -80,6 +82,7 @@ def train_unet(
             zarr_path = zarr_path,
             batch_size = batch_size,
             num_workers = num_workers,
+            add_gradient = add_gradient,
         ) for _, zarr_path in dataset_path(dataset_type).items()
     ]
 
