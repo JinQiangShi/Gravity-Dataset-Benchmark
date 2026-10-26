@@ -1,4 +1,3 @@
-import os
 import torch
 from torch.utils.data import DataLoader, Subset, Dataset
 from typing import List
@@ -10,6 +9,7 @@ class ZarrDataloader:
     def __init__(
         self,
         zarr_path: str,
+        zarr_name: str,
         batch_size: int,
         num_workers: int = 0,
         dtype: torch.dtype = torch.float32,
@@ -18,7 +18,7 @@ class ZarrDataloader:
         self.dataset = ZarrDataset(zarr_path, dtype=dtype, add_gradient=add_gradient)
         self.num_workers = num_workers
         self.batch_size = batch_size
-        self.zarr_name = os.path.splitext(os.path.basename(zarr_path))[0]
+        self.zarr_name = zarr_name
         self._init_dataset()
 
     def _init_dataset(self):

@@ -82,10 +82,11 @@ def train_unetpp(
     dataloaders = [
         ZarrDataloader(
             zarr_path = zarr_path,
+            zarr_name = zarr_name,
             batch_size = batch_size,
             num_workers = num_workers,
             add_gradient = add_gradient,
-        ) for _, zarr_path in dataset_path(dataset_type).items()
+        ) for zarr_name, zarr_path in dataset_path(dataset_type).items()
     ]
 
     train_loader = ZarrDataloader.merge(
