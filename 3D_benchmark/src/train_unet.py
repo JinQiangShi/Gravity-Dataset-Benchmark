@@ -17,7 +17,7 @@ from .scheduler import WarmupCosineScheduler
 def train_unet(
     save_dir: str,
     device: str,
-    dataset_type: Literal["geo_model", "fold_layer"] = "geo_model",
+    dataset_type: Literal["geo_model", "fold_layer", "all"] = "geo_model",
     max_epoch: int = 100,
     batch_size: int = 4,
     num_workers: int = 0,
@@ -37,7 +37,7 @@ def train_unet(
     ----------
     save_dir (str): directory to save the model checkpoints and test results.
     device (str): device to use for training.
-    dataset_type (Literal["geo_model", "fold_layer"]): type of the dataset to use, must be a key of DATASET_PATH, default is "geo_model".
+    dataset_type (Literal["geo_model", "fold_layer", "all"]): type of the dataset to use, must be a key of DATASET_PATH, default is "geo_model".
     max_epoch (int): maximum number of epochs to train, default is 100.
     batch_size (int): batch size for dataloader, default is 4.
     num_workers (int): number of workers for dataloader, default is 0.

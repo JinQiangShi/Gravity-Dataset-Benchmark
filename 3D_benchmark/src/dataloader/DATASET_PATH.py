@@ -15,6 +15,16 @@ DATASET_PATH = {
         "density1": os.path.join(dataset_dir, "fold_layer", "density1.zarr"),
         "density2": os.path.join(dataset_dir, "fold_layer", "density2.zarr"),
         "density3": os.path.join(dataset_dir, "fold_layer", "density3.zarr"),
+    },
+    "all": {
+        "geo_model_density1": os.path.join(dataset_dir, "geo_model", "density1.zarr"),
+        "geo_model_density2": os.path.join(dataset_dir, "geo_model", "density2.zarr"),
+        "geo_model_density3": os.path.join(dataset_dir, "geo_model", "density3.zarr"),
+        "geo_model_density4": os.path.join(dataset_dir, "geo_model", "density4.zarr"),
+        "geo_model_density5": os.path.join(dataset_dir, "geo_model", "density5.zarr"),
+        "fold_layer_density1": os.path.join(dataset_dir, "fold_layer", "density1.zarr"),
+        "fold_layer_density2": os.path.join(dataset_dir, "fold_layer", "density2.zarr"),
+        "fold_layer_density3": os.path.join(dataset_dir, "fold_layer", "density3.zarr"),
     }
 }
 

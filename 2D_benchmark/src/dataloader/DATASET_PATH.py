@@ -13,6 +13,14 @@ DATASET_PATH = {
     },
     "salt_model": {
         "density1": os.path.join(dataset_dir, "salt_model", "density1.zarr"),
+    },
+    "all": {
+        "geo_model_density1": os.path.join(dataset_dir, "geo_model", "density1.zarr"),
+        "geo_model_density2": os.path.join(dataset_dir, "geo_model", "density2.zarr"),
+        "geo_model_density3": os.path.join(dataset_dir, "geo_model", "density3.zarr"),
+        "geo_model_density4": os.path.join(dataset_dir, "geo_model", "density4.zarr"),
+        "geo_model_density5": os.path.join(dataset_dir, "geo_model", "density5.zarr"),
+        "salt_model_density1": os.path.join(dataset_dir, "salt_model", "density1.zarr"),
     }
 }
 
