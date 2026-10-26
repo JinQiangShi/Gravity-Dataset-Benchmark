@@ -9,21 +9,7 @@ $N = B \cdot n_z \cdot n_x$ 为元素总数（代码中以 `pred.numel()` 计算
 
 ---
 
-## 1. MSELoss
-
-均方误差，最基础的数据拟合项。
-
-$$
-\mathcal{L}_{\text{MSE}} = \frac{1}{N} \sum_{i=1}^{N} (\hat{m}_i - m_i)^2
-$$
-
-- 文件：`MSELoss.py`
-- 参数：无
-- 输入：`(pred, target)`
-
----
-
-## 2. HuberLoss
+## 1. HuberLoss
 
 Huber 损失，小误差时退化为 MSE、大误差时退化为 L1，兼顾收敛稳定性与抗离群值能力。
 
@@ -43,7 +29,7 @@ $$
 
 ---
 
-## 3. DepthWeightedHuberLoss
+## 2. DepthWeightedHuberLoss
 
 深度加权 Huber 损失。以 Huber 损失为基础，沿深度方向施加权重，
 用于压制位场反演的趋肤效应（浅部过度聚焦）。
@@ -67,7 +53,7 @@ $\mathcal{L}_{\delta}$ 为上文 Huber 的逐元素形式。
 
 ---
 
-## 4. TotalVariationLoss
+## 3. TotalVariationLoss
 
 各向异性 L1 总变差，平滑约束，抑制高频噪声与震荡解。
 为避免 $|\cdot|$ 在 0 处不可导，用 $\sqrt{d^2 + \epsilon}$ 做平滑近似。
@@ -87,7 +73,7 @@ $$
 
 ---
 
-## 5. MinimumSupportLoss
+## 4. MinimumSupportLoss
 
 最小体积支撑泛函（Minimum Support Functional, MSF），
 惩罚模型幅值非零区域，使反演结果趋于紧凑的异常体、收缩解的支撑。
@@ -103,7 +89,7 @@ $$
 
 ---
 
-## 6. MinimumGradientSupportLoss
+## 5. MinimumGradientSupportLoss
 
 最小梯度支撑泛函（Minimum Gradient Support Functional, MGS），
 收缩模型梯度的支撑，锐化物性界面、得到更清晰的块状结构。
@@ -123,7 +109,7 @@ $$
 
 ---
 
-## 7. SSIMLoss
+## 6. SSIMLoss
 
 结构相似性损失，衡量预测与真值的结构相似度，
 对整体形态（形状、界面连续性）比逐像素误差更敏感，可缓解条纹状伪影。
@@ -161,7 +147,7 @@ $$
 
 ---
 
-## 8. CombinedLoss
+## 7. CombinedLoss
 
 加权组合损失，将上述各项按权重求和：
 

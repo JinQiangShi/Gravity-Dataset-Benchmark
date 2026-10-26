@@ -11,21 +11,7 @@ All losses are `nn.Module`s whose `forward` returns a scalar, and smaller values
 
 ---
 
-## 1. MSELoss
-
-Mean squared error, the most basic data-fitting term.
-
-$$
-\mathcal{L}_{\text{MSE}} = \frac{1}{N} \sum_{i=1}^{N} (\hat{m}_i - m_i)^2
-$$
-
-- File: `MSELoss.py`
-- Parameters: none
-- Input: `(pred, target)`
-
----
-
-## 2. HuberLoss
+## 1. HuberLoss
 
 Huber loss, which reduces to MSE for small errors and to L1 for large errors,
 balancing convergence stability and robustness to outliers.
@@ -46,7 +32,7 @@ $$
 
 ---
 
-## 3. DepthWeightedHuberLoss
+## 2. DepthWeightedHuberLoss
 
 Depth-weighted Huber loss. Built on the Huber loss, it applies a weighting along the
 depth direction to counteract the skin effect of potential-field inversion
@@ -72,7 +58,7 @@ and $\mathcal{L}_{\delta}$ is the element-wise Huber form above.
 
 ---
 
-## 4. TotalVariationLoss
+## 3. TotalVariationLoss
 
 Anisotropic L1 total variation, a smoothness constraint that suppresses high-frequency
 noise and oscillatory solutions. To avoid the non-differentiability of $|\cdot|$ at 0,
@@ -93,7 +79,7 @@ $$
 
 ---
 
-## 5. MinimumSupportLoss
+## 4. MinimumSupportLoss
 
 Minimum Support Functional (MSF). It penalizes the region where the model amplitude is
 non-zero, driving the inversion toward compact anomalous bodies and shrinking the
@@ -110,7 +96,7 @@ $$
 
 ---
 
-## 6. MinimumGradientSupportLoss
+## 5. MinimumGradientSupportLoss
 
 Minimum Gradient Support Functional (MGS). It shrinks the support of the model gradient,
 sharpening the property interfaces and yielding clearer blocky structures.
@@ -130,7 +116,7 @@ $$
 
 ---
 
-## 7. SSIMLoss
+## 6. SSIMLoss
 
 Structural similarity loss. It measures the structural similarity between the prediction
 and the ground truth, being more sensitive to overall morphology (shape, interface
@@ -172,7 +158,7 @@ over all spatial locations.
 
 ---
 
-## 8. CombinedLoss
+## 7. CombinedLoss
 
 Weighted combined loss, summing the terms above with their weights:
 
