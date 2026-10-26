@@ -5,7 +5,7 @@ if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     root = r"E:\Research\benchmark\2D_benchmark\product"
 
-    # ========== Visualize on salt_model ==========
+    # ========== Visualize salt_model ==========
     visualize(
         npz_dir=os.path.join(root, "salt_model", "unetpp", "test_result"),
         plot_dir=os.path.join(root, "salt_model", "unetpp", "plot")
@@ -16,7 +16,7 @@ if __name__ == "__main__":
         plot_dir=os.path.join(root, "salt_model", "unet", "plot")
     )
 
-    # ========== Visualize on geo_model ==========
+    # ========== Visualize geo_model ==========
 
     # visualize(
     #     npz_dir=os.path.join(root, "geo_model", "unetpp_deepsupervision", "test_result"),
