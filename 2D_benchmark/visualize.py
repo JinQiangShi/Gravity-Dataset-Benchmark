@@ -4,17 +4,28 @@ from src import visualize
 if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     root = r"E:\Research\benchmark\2D_benchmark\product"
+    
+    # ========== Visualize all ==========
+    visualize(
+        npz_dir=os.path.join(root, "all", "unetpp", "test_result"),
+        plot_dir=os.path.join(root, "all", "unetpp", "plot")
+    )
+
+    visualize(
+        npz_dir=os.path.join(root, "all", "unet", "test_result"),
+        plot_dir=os.path.join(root, "all", "unet", "plot")
+    )
 
     # ========== Visualize salt_model ==========
-    visualize(
-        npz_dir=os.path.join(root, "salt_model", "unetpp", "test_result"),
-        plot_dir=os.path.join(root, "salt_model", "unetpp", "plot")
-    )
+    # visualize(
+    #     npz_dir=os.path.join(root, "salt_model", "unetpp", "test_result"),
+    #     plot_dir=os.path.join(root, "salt_model", "unetpp", "plot")
+    # )
 
-    visualize(
-        npz_dir=os.path.join(root, "salt_model", "unet", "test_result"),
-        plot_dir=os.path.join(root, "salt_model", "unet", "plot")
-    )
+    # visualize(
+    #     npz_dir=os.path.join(root, "salt_model", "unet", "test_result"),
+    #     plot_dir=os.path.join(root, "salt_model", "unet", "plot")
+    # )
 
     # ========== Visualize geo_model ==========
 

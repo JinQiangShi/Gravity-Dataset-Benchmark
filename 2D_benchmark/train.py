@@ -6,21 +6,8 @@ if __name__ == "__main__":
 
     # ========== Train on all models ==========
 
-    # train_unetpp(
-    #     save_dir = os.path.join(root, "all", "unetpp"),
-    #     device = "cuda",
-    #     dataset_type = "all",
-    #     max_epoch = 200,
-    #     batch_size = 32,
-    #     learning_rate = 1e-3,
-    #     add_gradient = True,
-    #     loss_kwargs = {"huber_weight": 1.0, "depth_weight": 1.0, "ssim_weight": 0.03, "tv_weight": 0.01, "ms_weight": 0.01, "mgs_weight": 0.01, "data_range": 1.0},
-    #     metric_kwargs = {"mae_weight": 1.0, "psnr_weight": 0.5, "ssim_weight": 0.3, "psnr_max": 25.0, "data_range": 1.0},
-    #     model_kwargs = {"in_channels": 2*2, "out_channels": 128, "deep_supervision": True},
-    # )
-
-    train_unet(
-        save_dir = os.path.join(root, "all", "unet"),
+    train_unetpp(
+        save_dir = os.path.join(root, "all", "unetpp"),
         device = "cuda",
         dataset_type = "all",
         max_epoch = 200,
@@ -29,8 +16,21 @@ if __name__ == "__main__":
         add_gradient = True,
         loss_kwargs = {"huber_weight": 1.0, "depth_weight": 1.0, "ssim_weight": 0.03, "tv_weight": 0.025, "ms_weight": 0.025, "mgs_weight": 0.025, "data_range": 1.0},
         metric_kwargs = {"mae_weight": 1.0, "psnr_weight": 0.5, "ssim_weight": 0.3, "psnr_max": 25.0, "data_range": 1.0},
-        model_kwargs = {"in_channels": 2*2, "out_channels": 128},
+        model_kwargs = {"in_channels": 2*2, "out_channels": 128, "deep_supervision": True},
     )
+
+    # train_unet(
+    #     save_dir = os.path.join(root, "all", "unet"),
+    #     device = "cuda",
+    #     dataset_type = "all",
+    #     max_epoch = 200,
+    #     batch_size = 32,
+    #     learning_rate = 1e-3,
+    #     add_gradient = True,
+    #     loss_kwargs = {"huber_weight": 1.0, "depth_weight": 1.0, "ssim_weight": 0.03, "tv_weight": 0.025, "ms_weight": 0.025, "mgs_weight": 0.025, "data_range": 1.0},
+    #     metric_kwargs = {"mae_weight": 1.0, "psnr_weight": 0.5, "ssim_weight": 0.3, "psnr_max": 25.0, "data_range": 1.0},
+    #     model_kwargs = {"in_channels": 2*2, "out_channels": 128},
+    # )
 
     # ========== Train on salt_model ==========
 
